@@ -1,0 +1,895 @@
+<!DOCTYPE html>
+
+
+
+  
+
+
+<html class="theme-next pisces use-motion" lang="zh-Hans">
+<head>
+  <meta charset="UTF-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
+<meta name="theme-color" content="#222">
+
+
+
+
+
+
+
+
+
+<meta http-equiv="Cache-Control" content="no-transform" />
+<meta http-equiv="Cache-Control" content="no-siteapp" />
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+  <link href="/lib/fancybox/source/jquery.fancybox.css?v=2.1.5" rel="stylesheet" type="text/css" />
+
+
+
+
+
+
+
+<link href="/lib/font-awesome/css/font-awesome.min.css?v=4.6.2" rel="stylesheet" type="text/css" />
+
+<link href="/css/main.css?v=5.1.3" rel="stylesheet" type="text/css" />
+
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=5.1.3">
+
+
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=5.1.3">
+
+
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=5.1.3">
+
+
+  <link rel="mask-icon" href="/images/logo.svg?v=5.1.3" color="#222">
+
+
+
+
+
+  <meta name="keywords" content="Android,源码分析,Zygote," />
+
+
+
+
+
+  <link rel="alternate" href="/atom.xml" title="YMlion's Blog" type="application/atom+xml" />
+
+
+
+
+
+
+<meta name="description" content="通过分析Zygote进程的启动过程，也了解到Zygote进程主要作用有三个：  预加载公共类和资源 启动SystemServer进程 通过socket接受消息，并创建应用子进程">
+<meta name="keywords" content="Android,源码分析,Zygote">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Zygote进程分析">
+<meta property="og:url" content="https://ymlion.com/post/zygote-analysis/index.html">
+<meta property="og:site_name" content="YMlion&#39;s Blog">
+<meta property="og:description" content="通过分析Zygote进程的启动过程，也了解到Zygote进程主要作用有三个：  预加载公共类和资源 启动SystemServer进程 通过socket接受消息，并创建应用子进程">
+<meta property="og:locale" content="zh-Hans">
+<meta property="og:updated_time" content="2018-04-08T03:49:50.112Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Zygote进程分析">
+<meta name="twitter:description" content="通过分析Zygote进程的启动过程，也了解到Zygote进程主要作用有三个：  预加载公共类和资源 启动SystemServer进程 通过socket接受消息，并创建应用子进程">
+
+
+
+<script type="text/javascript" id="hexo.configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Pisces',
+    version: '5.1.3',
+    sidebar: {"position":"left","display":"post","offset":12,"b2t":false,"scrollpercent":false,"onmobile":false},
+    fancybox: true,
+    tabs: true,
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    duoshuo: {
+      userId: '0',
+      author: '博主'
+    },
+    algolia: {
+      applicationID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    }
+  };
+</script>
+
+
+
+  <link rel="canonical" href="https://ymlion.com/post/zygote-analysis/"/>
+
+
+
+
+
+  <title>Zygote进程分析 | YMlion's Blog</title>
+  
+
+
+
+
+
+  <script type="text/javascript">
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?93ccb82075a783cf82b4e98bec7097e3";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" lang="zh-Hans">
+
+  
+  
+    
+  
+
+  <div class="container sidebar-position-left page-post-detail">
+    <div class="headband"></div>
+
+    <header id="header" class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-wrapper">
+  <div class="site-meta ">
+    
+
+    <div class="custom-logo-site-title">
+      <a href="/"  class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">YMlion's Blog</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+      
+        <p class="site-subtitle">写点什么</p>
+      
+  </div>
+
+  <div class="site-nav-toggle">
+    <button>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+    </button>
+  </div>
+</div>
+
+<nav class="site-nav">
+  
+
+  
+    <ul id="menu" class="menu">
+      
+        
+        <li class="menu-item menu-item-home">
+          <a href="/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-home"></i> <br />
+            
+            首页
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-tags">
+          <a href="/tags/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-tags"></i> <br />
+            
+            标签
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-categories">
+          <a href="/categories/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-th"></i> <br />
+            
+            分类
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-archives">
+          <a href="/archives/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-archive"></i> <br />
+            
+            归档
+          </a>
+        </li>
+      
+
+      
+    </ul>
+  
+
+  
+</nav>
+
+
+
+ </div>
+    </header>
+
+    <main id="main" class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          <div id="content" class="content">
+            
+
+  <div id="posts" class="posts-expand">
+    
+
+  
+
+  
+  
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="https://ymlion.com/post/zygote-analysis/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="YMlion">
+      <meta itemprop="description" content="">
+      <meta itemprop="image" content="/images/avatar.gif">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="YMlion's Blog">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">Zygote进程分析</h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">发表于</span>
+              
+              <time title="创建于" itemprop="dateCreated datePublished" datetime="2017-12-07T16:59:01+08:00">
+                2017-12-07
+              </time>
+            
+
+            
+
+            
+          </span>
+
+          
+            <span class="post-category" >
+            
+              <span class="post-meta-divider">|</span>
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">分类于</span>
+              
+              
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Android/" itemprop="url" rel="index">
+                    <span itemprop="name">Android</span>
+                  </a>
+                </span>
+
+                
+                
+                  ， 
+                
+              
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Android/源码分析/" itemprop="url" rel="index">
+                    <span itemprop="name">源码分析</span>
+                  </a>
+                </span>
+
+                
+                
+              
+            </span>
+          
+
+          
+            
+          
+
+          
+          
+
+          
+            <span class="post-meta-divider">|</span>
+            <span class="page-pv"><i class="fa fa-file-o"></i>
+            <span class="busuanzi-value" id="busuanzi_value_page_pv" ></span>
+            </span>
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        <p>通过分析<code>Zygote</code>进程的启动过程，也了解到<code>Zygote</code>进程主要作用有三个：</p>
+<ul>
+<li>预加载公共类和资源</li>
+<li>启动<code>SystemServer</code>进程</li>
+<li>通过socket接受消息，并创建应用子进程</li>
+</ul>
+<a id="more"></a>
+<h2 id="预加载公共类和资源"><a href="#预加载公共类和资源" class="headerlink" title="预加载公共类和资源"></a>预加载公共类和资源</h2><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">static</span> <span class="keyword">void</span> <span class="title">preload</span><span class="params">(BootTimingsTraceLog bootTimingsTraceLog)</span> </span>&#123;</span><br><span class="line">    ......</span><br><span class="line">    preloadClasses();<span class="comment">// 1</span></span><br><span class="line">    ......</span><br><span class="line">    preloadResources();<span class="comment">// 2</span></span><br><span class="line">    ......</span><br><span class="line">    preloadOpenGL();<span class="comment">// 3</span></span><br><span class="line">    ......</span><br><span class="line">    preloadSharedLibraries();<span class="comment">// 4</span></span><br><span class="line">    preloadTextResources();<span class="comment">// 5</span></span><br><span class="line">    <span class="comment">// Ask the WebViewFactory to do any initialization that must run in the zygote process,</span></span><br><span class="line">    <span class="comment">// for memory sharing purposes.</span></span><br><span class="line">    WebViewFactory.prepareWebViewInZygote();<span class="comment">// 6</span></span><br><span class="line">    ......</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<ol>
+<li><p><code>preloadClasses</code>方法通过读取<code>/system/etc/preloaded-classes</code>文件的每一行获取类名，然后通过<code>Class.forName(line, true, null)</code>初始化每一个类。</p>
+<blockquote>
+<p><code>/system/etc/preloaded-classes</code>文件几乎涵盖了所有实际开发中用到的类，另外该文件来自<code>frameworks/base/preloaded-classes</code>，随着版本更替，现在预加载的类已经多达4500多个。</p>
+</blockquote>
+</li>
+<li><p><code>preloadResources</code>方法获取到<code>Resources</code>，然后去加载常用的<code>drawables</code>、<code>color_state_lists</code>，分别对应于<code>com.android.internal.R.array.preloaded_drawables</code>和<code>com.android.internal.R.array.preloaded_color_state_lists</code>。</p>
+</li>
+<li><p>预加载OpenGL。</p>
+</li>
+<li><p>加载共享库，这三个就是平时最常使用的库了</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">System.loadLibrary(<span class="string">"android"</span>);</span><br><span class="line">System.loadLibrary(<span class="string">"compiler_rt"</span>);</span><br><span class="line">System.loadLibrary(<span class="string">"jnigraphics"</span>); <span class="comment">// 提供对java层bitmap对象的可靠操作</span></span><br></pre></td></tr></table></figure>
+</li>
+<li><p>通过<code>TextView.preloadFontCache</code>来建立字体缓存，该方法仅仅是通过计算“H”宽度来实现的。</p>
+</li>
+<li><p><code>WebView</code>中需要预加载的东西，目前只是用于为后面加载JNI库分配地址空间。</p>
+</li>
+</ol>
+<h2 id="启动SystemServer"><a href="#启动SystemServer" class="headerlink" title="启动SystemServer"></a>启动SystemServer</h2><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * Prepare the arguments and fork for the system server process.</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">boolean</span> <span class="title">startSystemServer</span><span class="params">(String abiList, String socketName, ZygoteServer zygoteServer)</span></span></span><br><span class="line"><span class="function">        <span class="keyword">throws</span> Zygote.MethodAndArgsCaller, RuntimeException </span>&#123;</span><br><span class="line">    <span class="comment">// 最前面是为创建SystemServer准备参数</span></span><br><span class="line">    <span class="keyword">long</span> capabilities = posixCapabilitiesAsBits(</span><br><span class="line">        OsConstants.CAP_IPC_LOCK,</span><br><span class="line">        OsConstants.CAP_KILL,</span><br><span class="line">        OsConstants.CAP_NET_ADMIN,</span><br><span class="line">        OsConstants.CAP_NET_BIND_SERVICE,</span><br><span class="line">        OsConstants.CAP_NET_BROADCAST,</span><br><span class="line">        OsConstants.CAP_NET_RAW,</span><br><span class="line">        OsConstants.CAP_SYS_MODULE,</span><br><span class="line">        OsConstants.CAP_SYS_NICE,</span><br><span class="line">        OsConstants.CAP_SYS_PTRACE,</span><br><span class="line">        OsConstants.CAP_SYS_TIME,</span><br><span class="line">        OsConstants.CAP_SYS_TTY_CONFIG,</span><br><span class="line">        OsConstants.CAP_WAKE_ALARM</span><br><span class="line">    );</span><br><span class="line">    <span class="comment">/* Containers run without this capability, so avoid setting it in that case */</span></span><br><span class="line">    <span class="keyword">if</span> (!SystemProperties.getBoolean(PROPERTY_RUNNING_IN_CONTAINER, <span class="keyword">false</span>)) &#123;</span><br><span class="line">        capabilities |= posixCapabilitiesAsBits(OsConstants.CAP_BLOCK_SUSPEND);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">/* Hardcoded command line to start the system server */</span></span><br><span class="line">    String args[] = &#123;</span><br><span class="line">        <span class="string">"--setuid=1000"</span>,</span><br><span class="line">        <span class="string">"--setgid=1000"</span>,</span><br><span class="line">        <span class="string">"--setgroups=1001,1002,1003,1004,1005,1006,1007,1008,1009,1010,1018,1021,1023,1032,3001,3002,3003,3006,3007,3009,3010"</span>,</span><br><span class="line">        <span class="string">"--capabilities="</span> + capabilities + <span class="string">","</span> + capabilities,</span><br><span class="line">        <span class="string">"--nice-name=system_server"</span>,</span><br><span class="line">        <span class="string">"--runtime-args"</span>,</span><br><span class="line">        <span class="string">"com.android.server.SystemServer"</span>,</span><br><span class="line">    &#125;;</span><br><span class="line">    ZygoteConnection.Arguments parsedArgs = <span class="keyword">null</span>;</span><br><span class="line">    <span class="keyword">int</span> pid;</span><br><span class="line">    <span class="keyword">try</span> &#123;</span><br><span class="line">        <span class="comment">// 参数解析工具类来解析参数</span></span><br><span class="line">        parsedArgs = <span class="keyword">new</span> ZygoteConnection.Arguments(args);</span><br><span class="line">        ZygoteConnection.applyDebuggerSystemProperty(parsedArgs);</span><br><span class="line">        ZygoteConnection.applyInvokeWithSystemProperty(parsedArgs);</span><br><span class="line">        <span class="comment">/* Request to fork the system server process */</span></span><br><span class="line">        pid = Zygote.forkSystemServer(</span><br><span class="line">                parsedArgs.uid, parsedArgs.gid,</span><br><span class="line">                parsedArgs.gids,</span><br><span class="line">                parsedArgs.debugFlags,</span><br><span class="line">                <span class="keyword">null</span>,</span><br><span class="line">                parsedArgs.permittedCapabilities,</span><br><span class="line">                parsedArgs.effectiveCapabilities);</span><br><span class="line">    &#125; <span class="keyword">catch</span> (IllegalArgumentException ex) &#123;</span><br><span class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> RuntimeException(ex);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">/* For child process */</span></span><br><span class="line">    <span class="keyword">if</span> (pid == <span class="number">0</span>) &#123;<span class="comment">// 子进程创建成功</span></span><br><span class="line">        <span class="keyword">if</span> (hasSecondZygote(abiList)) &#123;</span><br><span class="line">            waitForSecondaryZygote(socketName);</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="comment">// 关闭socket</span></span><br><span class="line">        zygoteServer.closeServerSocket();</span><br><span class="line">        handleSystemServerProcess(parsedArgs);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> <span class="keyword">true</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>该方法首先准备创建<code>SystemServer</code>的参数，可以看出进程<code>uid</code>和<code>gid</code>都是100，然后调用<code>Zygote.forkSystemServer</code>来创建，最后通过<code>pid</code>判断是否是子进程即<code>SystemServer</code>进程，若是则进行后续的一些操作，否则直接返回。</p>
+<p>下面看下子进程fork过程，在<code>Zygote.forkSystermServer</code>中没有实际fork代码，但是有fork过程，分为两步：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">int</span> <span class="title">forkSystemServer</span><span class="params">(<span class="keyword">int</span> uid, <span class="keyword">int</span> gid, <span class="keyword">int</span>[] gids, <span class="keyword">int</span> debugFlags,</span></span></span><br><span class="line"><span class="function"><span class="params">        <span class="keyword">int</span>[][] rlimits, <span class="keyword">long</span> permittedCapabilities, <span class="keyword">long</span> effectiveCapabilities)</span> </span>&#123;</span><br><span class="line">    VM_HOOKS.preFork(); <span class="comment">// 1：关闭垃圾回收相关的守护线程，并初始化堆</span></span><br><span class="line">    <span class="comment">// Resets nice priority for zygote process.</span></span><br><span class="line">    resetNicePriority();</span><br><span class="line">    <span class="keyword">int</span> pid = nativeForkSystemServer(<span class="comment">// 2</span></span><br><span class="line">            uid, gid, gids, debugFlags, rlimits, permittedCapabilities, effectiveCapabilities);</span><br><span class="line">    <span class="comment">// Enable tracing as soon as we enter the system_server.</span></span><br><span class="line">    <span class="keyword">if</span> (pid == <span class="number">0</span>) &#123;</span><br><span class="line">        Trace.setTracingEnabled(<span class="keyword">true</span>);</span><br><span class="line">    &#125;</span><br><span class="line">    VM_HOOKS.postForkCommon(); <span class="comment">// 启动新的垃圾回收相关守护线程</span></span><br><span class="line">    <span class="keyword">return</span> pid;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>第一步是创建前的准备，源码路径为<code>/libcore/dalvik/src/main/java/dalvik/system/ZygoteHooks.java</code>，每次fork前都会调用，紧接着该方法又调用了本地方法<code>/art/runtime/native/dalvik_system_ZygoteHooks.nativePreFork</code>，该函数也没做什么就调用了<code>/art/runtime/runtime.PreZygoteFork</code>函数，同样这个函数就只调用了<code>/art/runtime/gc/heap.PreZygoteFork</code>，到这里就清晰了这一步就是执行堆初始化。</p>
+<p>第二步就是创建进程了，直接调用了本地方法<code>nativeForkSystemServer</code>，该方法在<code>/framework/base/core/jni/com_android_internal_os_Zygote.cpp</code>中，同样该方法也不是创建子进程的地方，又调用了<code>ForkAndSpecializeCommon</code>方法，最终创建出子进程，该方法比较长，大体看一下关键地方：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// Utility routine to fork zygote and specialize the child process.</span></span><br><span class="line"><span class="function"><span class="keyword">static</span> pid_t <span class="title">ForkAndSpecializeCommon</span><span class="params">(JNIEnv* env, <span class="keyword">uid_t</span> uid, <span class="keyword">gid_t</span> gid, jintArray javaGids,</span></span></span><br><span class="line"><span class="function"><span class="params">                                     jint debug_flags, jobjectArray javaRlimits,</span></span></span><br><span class="line"><span class="function"><span class="params">                                     jlong permittedCapabilities, jlong effectiveCapabilities,</span></span></span><br><span class="line"><span class="function"><span class="params">                                     jint mount_external,</span></span></span><br><span class="line"><span class="function"><span class="params">                                     jstring java_se_info, jstring java_se_name,</span></span></span><br><span class="line"><span class="function"><span class="params">                                     <span class="keyword">bool</span> is_system_server, jintArray fdsToClose,</span></span></span><br><span class="line"><span class="function"><span class="params">                                     jintArray fdsToIgnore,</span></span></span><br><span class="line"><span class="function"><span class="params">                                     jstring instructionSet, jstring dataDir)</span> </span>&#123;</span><br><span class="line">  ......</span><br><span class="line">  <span class="keyword">pid_t</span> pid = fork();</span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span> (pid == <span class="number">0</span>) &#123;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (!is_system_server) &#123;<span class="comment">// 非systemserver，则创建进程组</span></span><br><span class="line">        <span class="keyword">int</span> rc = createProcessGroup(uid, getpid());</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">// 设置gid</span></span><br><span class="line">    SetGids(env, javaGids);</span><br><span class="line">    <span class="comment">// 设置资源范围</span></span><br><span class="line">    SetRLimits(env, javaRlimits);</span><br><span class="line">    <span class="comment">// Linux方法，设置gid和uid</span></span><br><span class="line">    <span class="keyword">int</span> rc = setresgid(gid, gid, gid);</span><br><span class="line">    rc = setresuid(uid, uid, uid);</span><br><span class="line"></span><br><span class="line">    SetCapabilities(env, permittedCapabilities, effectiveCapabilities, permittedCapabilities);</span><br><span class="line">    <span class="comment">// 设置调度策略</span></span><br><span class="line">    SetSchedulerPolicy(env);</span><br><span class="line">    <span class="comment">// 设置安全增强型Linux环境</span></span><br><span class="line">    rc = selinux_android_setcontext(uid, is_system_server, se_info_c_str, se_name_c_str);</span><br><span class="line"></span><br><span class="line">    <span class="comment">// Make it easier to debug audit logs by setting the main thread's name to the</span></span><br><span class="line">    <span class="comment">// nice name rather than "app_process".</span></span><br><span class="line">    <span class="keyword">if</span> (se_info_c_str == <span class="literal">NULL</span> &amp;&amp; is_system_server) &#123;</span><br><span class="line">      se_name_c_str = <span class="string">"system_server"</span>;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">if</span> (se_info_c_str != <span class="literal">NULL</span>) &#123;</span><br><span class="line">      SetThreadName(se_name_c_str);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">// 调用Java方法，根据参数值可知为Zygote.callPostForkChildHooks方法</span></span><br><span class="line">    env-&gt;CallStaticVoidMethod(gZygoteClass, gCallPostForkChildHooks, debug_flags,</span><br><span class="line">                              is_system_server, instructionSet);</span><br><span class="line">   </span><br><span class="line">  &#125; <span class="keyword">else</span> <span class="keyword">if</span> (pid &gt; <span class="number">0</span>) &#123;<span class="comment">// 父进程即zygote，不做处理</span></span><br><span class="line">    ......</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="keyword">return</span> pid;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>创建进程都在该方法中进行，调用<code>fork</code>之后，则进行一些子进程的属性设置，父进程则忽略。Linux系统创建进程基本是fork+exec方式，这里并没有执行exec相关函数，但也都是copy on write策略。</p>
+<blockquote>
+<p><code>env-&gt;CallStaticVoidMethod</code>是native层调用java层的方法，三个参数，第一个是目标类class对象，第二个是方法对象，后面是参数，其中前两个参数通过下面方式获取：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">&gt; gZygoteClass = MakeGlobalRefOrDie(env, FindClassOrDie(env, kZygoteClassName));</span><br><span class="line">&gt; gCallPostForkChildHooks = GetStaticMethodIDOrDie(env, gZygoteClass, <span class="string">"callPostForkChildHooks"</span>,                                                <span class="string">"(IZLjava/lang/String;)V"</span>);</span><br><span class="line">&gt;</span><br></pre></td></tr></table></figure>
+</blockquote>
+<p>到这里，<code>systemserver</code>进程就创建完成了，后面又回到了<code>ZygoteInit.startSystemServer</code>方法，当pid为0时说明创建的是子进程，然后调用<code>handleSystemServerProcess</code>去处理剩下的工作。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">handleSystemServerProcess</span><span class="params">(</span></span></span><br><span class="line"><span class="function"><span class="params">        ZygoteConnection.Arguments parsedArgs)</span></span></span><br><span class="line"><span class="function">        <span class="keyword">throws</span> Zygote.MethodAndArgsCaller </span>&#123;</span><br><span class="line">    <span class="keyword">final</span> String systemServerClasspath = Os.getenv(<span class="string">"SYSTEMSERVERCLASSPATH"</span>);</span><br><span class="line">    <span class="keyword">if</span> (systemServerClasspath != <span class="keyword">null</span>) &#123;</span><br><span class="line">        performSystemServerDexOpt(systemServerClasspath);<span class="comment">// dex优化</span></span><br><span class="line">        <span class="comment">// Capturing profiles is only supported for debug or eng builds since selinux normally</span></span><br><span class="line">        <span class="comment">// prevents it.</span></span><br><span class="line">        <span class="keyword">boolean</span> profileSystemServer = SystemProperties.getBoolean(</span><br><span class="line">                <span class="string">"dalvik.vm.profilesystemserver"</span>, <span class="keyword">false</span>);</span><br><span class="line">        <span class="keyword">if</span> (profileSystemServer &amp;&amp; (Build.IS_USERDEBUG || Build.IS_ENG)) &#123;</span><br><span class="line">            <span class="keyword">try</span> &#123;</span><br><span class="line">                File profileDir = Environment.getDataProfilesDePackageDirectory(</span><br><span class="line">                        Process.SYSTEM_UID, <span class="string">"system_server"</span>);</span><br><span class="line">                File profile = <span class="keyword">new</span> File(profileDir, <span class="string">"primary.prof"</span>);</span><br><span class="line">                profile.getParentFile().mkdirs();</span><br><span class="line">                profile.createNewFile();</span><br><span class="line">                String[] codePaths = systemServerClasspath.split(<span class="string">":"</span>);</span><br><span class="line">                VMRuntime.registerAppInfo(profile.getPath(), codePaths);</span><br><span class="line">            &#125; <span class="keyword">catch</span> (Exception e) &#123;</span><br><span class="line">                Log.wtf(TAG, <span class="string">"Failed to set up system server profile"</span>, e);</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">if</span> (parsedArgs.invokeWith != <span class="keyword">null</span>) &#123;</span><br><span class="line">        String[] args = parsedArgs.remainingArgs;</span><br><span class="line">        <span class="comment">// If we have a non-null system server class path, we'll have to duplicate the</span></span><br><span class="line">        <span class="comment">// existing arguments and append the classpath to it. ART will handle the classpath</span></span><br><span class="line">        <span class="comment">// correctly when we exec a new process.</span></span><br><span class="line">        <span class="keyword">if</span> (systemServerClasspath != <span class="keyword">null</span>) &#123;</span><br><span class="line">            String[] amendedArgs = <span class="keyword">new</span> String[args.length + <span class="number">2</span>];</span><br><span class="line">            amendedArgs[<span class="number">0</span>] = <span class="string">"-cp"</span>;</span><br><span class="line">            amendedArgs[<span class="number">1</span>] = systemServerClasspath;</span><br><span class="line">            System.arraycopy(args, <span class="number">0</span>, amendedArgs, <span class="number">2</span>, args.length);</span><br><span class="line">            args = amendedArgs;</span><br><span class="line">        &#125;</span><br><span class="line">      <span class="comment">//启动应用</span></span><br><span class="line">        WrapperInit.execApplication(parsedArgs.invokeWith,</span><br><span class="line">                parsedArgs.niceName, parsedArgs.targetSdkVersion,</span><br><span class="line">                VMRuntime.getCurrentInstructionSet(), <span class="keyword">null</span>, args);</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        ClassLoader cl = <span class="keyword">null</span>;</span><br><span class="line">        <span class="keyword">if</span> (systemServerClasspath != <span class="keyword">null</span>) &#123;</span><br><span class="line">            cl = createPathClassLoader(systemServerClasspath, parsedArgs.targetSdkVersion);</span><br><span class="line">            Thread.currentThread().setContextClassLoader(cl);</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="comment">/*</span></span><br><span class="line"><span class="comment">         * Pass the remaining arguments to SystemServer.主要看这个方法，正常systemserver执行的地方</span></span><br><span class="line"><span class="comment">         */</span></span><br><span class="line">        ZygoteInit.zygoteInit(parsedArgs.targetSdkVersion, parsedArgs.remainingArgs, cl);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">/* should never reach here */</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>前面代码就略过了，看下<code>ZygoteInit.zygoteInit</code>方法：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="keyword">void</span> <span class="title">zygoteInit</span><span class="params">(<span class="keyword">int</span> targetSdkVersion, String[] argv,</span></span></span><br><span class="line"><span class="function"><span class="params">        ClassLoader classLoader)</span> <span class="keyword">throws</span> Zygote.MethodAndArgsCaller </span>&#123;</span><br><span class="line">    ......</span><br><span class="line">    RuntimeInit.redirectLogStreams(); <span class="comment">// 重定向日志</span></span><br><span class="line">    RuntimeInit.commonInit(); <span class="comment">// 部分内容初始化</span></span><br><span class="line">    ZygoteInit.nativeZygoteInit(); <span class="comment">// zygote init回调</span></span><br><span class="line">    RuntimeInit.applicationInit(targetSdkVersion, argv, classLoader); <span class="comment">// 应用初始化</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>下面看下<code>RuntimeInit.commonInit()</code>方法初始化了什么内容：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">protected</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="keyword">void</span> <span class="title">commonInit</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="comment">/*</span></span><br><span class="line"><span class="comment">     * set handlers; these apply to all threads in the VM. Apps can replace</span></span><br><span class="line"><span class="comment">     * the default handler, but not the pre handler.</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    Thread.setUncaughtExceptionPreHandler(<span class="keyword">new</span> LoggingHandler());</span><br><span class="line">    Thread.setDefaultUncaughtExceptionHandler(<span class="keyword">new</span> KillApplicationHandler());</span><br><span class="line">    <span class="comment">/*</span></span><br><span class="line"><span class="comment">     * Install a TimezoneGetter subclass for ZoneInfo.db</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    TimezoneGetter.setInstance(<span class="keyword">new</span> TimezoneGetter() &#123;</span><br><span class="line">        <span class="meta">@Override</span></span><br><span class="line">        <span class="function"><span class="keyword">public</span> String <span class="title">getId</span><span class="params">()</span> </span>&#123;</span><br><span class="line">            <span class="keyword">return</span> SystemProperties.get(<span class="string">"persist.sys.timezone"</span>);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;);</span><br><span class="line">    TimeZone.setDefault(<span class="keyword">null</span>);</span><br><span class="line">    <span class="comment">/*</span></span><br><span class="line"><span class="comment">     * Sets handler for java.util.logging to use Android log facilities.</span></span><br><span class="line"><span class="comment">     * The odd "new instance-and-then-throw-away" is a mirror of how</span></span><br><span class="line"><span class="comment">     * the "java.util.logging.config.class" system property works. We</span></span><br><span class="line"><span class="comment">     * can't use the system property here since the logger has almost</span></span><br><span class="line"><span class="comment">     * certainly already been initialized.</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    LogManager.getLogManager().reset();</span><br><span class="line">    <span class="keyword">new</span> AndroidConfig();</span><br><span class="line">    <span class="comment">/*</span></span><br><span class="line"><span class="comment">     * Sets the default HTTP User-Agent used by HttpURLConnection.</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    String userAgent = getDefaultUserAgent();</span><br><span class="line">    System.setProperty(<span class="string">"http.agent"</span>, userAgent);</span><br><span class="line">    <span class="comment">/*</span></span><br><span class="line"><span class="comment">     * Wire socket tagging to traffic stats. 流量统计</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    NetworkManagementSocketTagger.install();</span><br><span class="line">    <span class="comment">/*</span></span><br><span class="line"><span class="comment">     * If we're running in an emulator launched with "-trace", put the</span></span><br><span class="line"><span class="comment">     * VM into emulator trace profiling mode so that the user can hit</span></span><br><span class="line"><span class="comment">     * F9/F10 at any time to capture traces.  This has performance</span></span><br><span class="line"><span class="comment">     * consequences, so it's not something you want to do always.</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    String trace = SystemProperties.get(<span class="string">"ro.kernel.android.tracing"</span>);</span><br><span class="line">    <span class="keyword">if</span> (trace.equals(<span class="string">"1"</span>)) &#123;</span><br><span class="line">        Slog.i(TAG, <span class="string">"NOTE: emulator trace profiling enabled"</span>);</span><br><span class="line">        Debug.enableEmulatorTraceOutput();</span><br><span class="line">    &#125;</span><br><span class="line">    initialized = <span class="keyword">true</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>注释很清楚，就是一些通用设置。<code>ZygoteInit.nativeZygoteInit</code>实现是在<code>AndroidRuntime.cpp</code>中，最后做了什么呢，就是调用了<code>AppRuntime.onZygoteInit</code>，转了一圈回到了<code>app_main.cpp</code>中： </p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">virtual</span> <span class="keyword">void</span> <span class="title">onZygoteInit</span><span class="params">()</span></span></span><br><span class="line"><span class="function"></span>&#123;   <span class="comment">// binder操作，较为复杂，涉及binder核心原理，后面binder分析时再研究。</span></span><br><span class="line">    <span class="comment">// /frameworks/native/libs/binder/ProcessState.cpp</span></span><br><span class="line">    sp&lt;ProcessState&gt; proc = ProcessState::self();</span><br><span class="line">    proc-&gt;startThreadPool();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>接着就是最后一步初始化工作<code>RuntimeInit.applicationInit</code>：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">protected</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">applicationInit</span><span class="params">(<span class="keyword">int</span> targetSdkVersion, String[] argv, ClassLoader classLoader)</span></span></span><br><span class="line"><span class="function">        <span class="keyword">throws</span> Zygote.MethodAndArgsCaller </span>&#123;</span><br><span class="line">    <span class="comment">// If the application calls System.exit(), terminate the process</span></span><br><span class="line">    <span class="comment">// immediately without running any shutdown hooks.  It is not possible to</span></span><br><span class="line">    <span class="comment">// shutdown an Android application gracefully.  Among other things, the</span></span><br><span class="line">    <span class="comment">// Android runtime shutdown hooks close the Binder driver, which can cause</span></span><br><span class="line">    <span class="comment">// leftover running threads to crash before the process actually exits.</span></span><br><span class="line">    nativeSetExitWithoutCleanup(<span class="keyword">true</span>);</span><br><span class="line">    <span class="comment">// We want to be fairly aggressive about heap utilization, to avoid</span></span><br><span class="line">    <span class="comment">// holding on to a lot of memory that isn't needed.</span></span><br><span class="line">    VMRuntime.getRuntime().setTargetHeapUtilization(<span class="number">0.75f</span>);</span><br><span class="line">    VMRuntime.getRuntime().setTargetSdkVersion(targetSdkVersion);</span><br><span class="line">    <span class="keyword">final</span> Arguments args;</span><br><span class="line">    <span class="keyword">try</span> &#123; <span class="comment">// 参数解析</span></span><br><span class="line">        args = <span class="keyword">new</span> Arguments(argv);</span><br><span class="line">    &#125; <span class="keyword">catch</span> (IllegalArgumentException ex) &#123;</span><br><span class="line">        Slog.e(TAG, ex.getMessage());</span><br><span class="line">        <span class="comment">// let the process exit</span></span><br><span class="line">        <span class="keyword">return</span>;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">// The end of of the RuntimeInit event (see #zygoteInit).</span></span><br><span class="line">    Trace.traceEnd(Trace.TRACE_TAG_ACTIVITY_MANAGER);</span><br><span class="line">    <span class="comment">// Remaining arguments are passed to the start class's static main</span></span><br><span class="line">    <span class="comment">// 通过参数启动对应类的main方法，执行应用自己的代码</span></span><br><span class="line">    invokeStaticMain(args.startClass, args.startArgs, classLoader);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>在<code>ZygoteInit.startSystemServer</code>时，可以知道这里的参数值是<code>com.android.server.SystemServer</code>，最后调用的是<code>SystemServer.main</code>方法，这个地方处理比较有意思，下面看下是怎么调用的：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">invokeStaticMain</span><span class="params">(String className, String[] argv, ClassLoader classLoader)</span></span></span><br><span class="line"><span class="function">        <span class="keyword">throws</span> Zygote.MethodAndArgsCaller </span>&#123;</span><br><span class="line">    Class&lt;?&gt; cl;</span><br><span class="line">    <span class="keyword">try</span> &#123;</span><br><span class="line">        cl = Class.forName(className, <span class="keyword">true</span>, classLoader);</span><br><span class="line">    &#125;</span><br><span class="line">    Method m;</span><br><span class="line">    <span class="keyword">try</span> &#123;</span><br><span class="line">        m = cl.getMethod(<span class="string">"main"</span>, <span class="keyword">new</span> Class[] &#123; String[].class &#125;);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">/*</span></span><br><span class="line"><span class="comment">     * This throw gets caught in ZygoteInit.main(), which responds</span></span><br><span class="line"><span class="comment">     * by invoking the exception's run() method. This arrangement</span></span><br><span class="line"><span class="comment">     * clears up all the stack frames that were required in setting</span></span><br><span class="line"><span class="comment">     * up the process.</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">throw</span> <span class="keyword">new</span> Zygote.MethodAndArgsCaller(m, argv);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>获取的方法实例后，没有直接调用，而是抛出了一个异常<code>Zygote.MethodAndArgsCaller</code>，这里的注释也解释很清楚了，在<code>ZygoteInit.main()</code>中， 最后catch到了该异常，并执行了run方法，为啥这么做呢？目的就是清理所有调用过方法的栈帧。</p>
+<p><code>Zygote.MethodAndArgsCaller</code>就一行代码，执行main方法，到这里<code>SystemServer</code>进程开始执行自己的代码。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">mMethod.invoke(<span class="keyword">null</span>, <span class="keyword">new</span> Object[] &#123; mArgs &#125;);</span><br></pre></td></tr></table></figure>
+<h2 id="fork子进程"><a href="#fork子进程" class="headerlink" title="fork子进程"></a>fork子进程</h2><p>说到启动过程，<code>SystemServer</code>的启动是系统启动过程，但还有应用程序的启动过程，通过上面的代码可以看出，<code>SystermServer</code>启动后，执行<code>SystemServer.main</code>的时候，<code>ZygoteInit.main</code>方法就结束了。但<code>Zygote</code>进程还有一个工作就是fork其他应用程序，那这是怎么做的呢？就在<code>ZygoteInit.main</code>最后部分，调用了<code>zygoteServer.runSelectLoop(abiList)</code>方法，通过名字就知道是死循环，看下具体代码：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * Runs the zygote process's select loop. Accepts new connections as</span></span><br><span class="line"><span class="comment"> * they happen, and reads commands from connections one spawn-request's</span></span><br><span class="line"><span class="comment"> * worth at a time.</span></span><br><span class="line"><span class="comment"> *</span></span><br><span class="line"><span class="comment"> * <span class="doctag">@throws</span> Zygote.MethodAndArgsCaller in a child process when a main()</span></span><br><span class="line"><span class="comment"> * should be executed.</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">runSelectLoop</span><span class="params">(String abiList)</span> <span class="keyword">throws</span> Zygote.MethodAndArgsCaller </span>&#123;</span><br><span class="line">    ArrayList&lt;FileDescriptor&gt; fds = <span class="keyword">new</span> ArrayList&lt;FileDescriptor&gt;();</span><br><span class="line">    ArrayList&lt;ZygoteConnection&gt; peers = <span class="keyword">new</span> ArrayList&lt;ZygoteConnection&gt;();</span><br><span class="line">    fds.add(mServerSocket.getFileDescriptor());</span><br><span class="line">    peers.add(<span class="keyword">null</span>); <span class="comment">// 与fds保持一致</span></span><br><span class="line">    <span class="keyword">while</span> (<span class="keyword">true</span>) &#123;</span><br><span class="line">        StructPollfd[] pollFds = <span class="keyword">new</span> StructPollfd[fds.size()];</span><br><span class="line">        <span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">0</span>; i &lt; pollFds.length; ++i) &#123;</span><br><span class="line">            pollFds[i] = <span class="keyword">new</span> StructPollfd();</span><br><span class="line">            pollFds[i].fd = fds.get(i);</span><br><span class="line">            pollFds[i].events = (<span class="keyword">short</span>) POLLIN;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">try</span> &#123;</span><br><span class="line">            Os.poll(pollFds, -<span class="number">1</span>);</span><br><span class="line">        &#125; <span class="keyword">catch</span> (ErrnoException ex) &#123;</span><br><span class="line">            <span class="keyword">throw</span> <span class="keyword">new</span> RuntimeException(<span class="string">"poll failed"</span>, ex);</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">for</span> (<span class="keyword">int</span> i = pollFds.length - <span class="number">1</span>; i &gt;= <span class="number">0</span>; --i) &#123;</span><br><span class="line">            <span class="keyword">if</span> ((pollFds[i].revents &amp; POLLIN) == <span class="number">0</span>) &#123;</span><br><span class="line">                <span class="keyword">continue</span>;</span><br><span class="line">            &#125;</span><br><span class="line">            <span class="keyword">if</span> (i == <span class="number">0</span>) &#123; <span class="comment">// 有新的连接</span></span><br><span class="line">                ZygoteConnection newPeer = acceptCommandPeer(abiList);</span><br><span class="line">                peers.add(newPeer);</span><br><span class="line">                fds.add(newPeer.getFileDesciptor());</span><br><span class="line">            &#125; <span class="keyword">else</span> &#123; <span class="comment">// 创建新进程</span></span><br><span class="line">                <span class="keyword">boolean</span> done = peers.get(i).runOnce(<span class="keyword">this</span>);</span><br><span class="line">                <span class="keyword">if</span> (done) &#123;</span><br><span class="line">                    peers.remove(i);</span><br><span class="line">                    fds.remove(i);</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>没有<code>break</code>， 那死循环退出只能靠抛出异常，像上面创建<code>SystemServer</code>一样，通过抛出异常被捕获退出。下面进入<code>ZygoteConnection.runOnce</code>方法创建子进程并抛出异常： </p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * Reads one start command from the command socket. If successful,</span></span><br><span class="line"><span class="comment"> * a child is forked and a &#123;<span class="doctag">@link</span> Zygote.MethodAndArgsCaller&#125;</span></span><br><span class="line"><span class="comment"> * exception is thrown in that child while in the parent process,</span></span><br><span class="line"><span class="comment"> * the method returns normally. On failure, the child is not</span></span><br><span class="line"><span class="comment"> * spawned and messages are printed to the log and stderr. Returns</span></span><br><span class="line"><span class="comment"> * a boolean status value indicating whether an end-of-file on the command</span></span><br><span class="line"><span class="comment"> * socket has been encountered.</span></span><br><span class="line"><span class="comment"> *</span></span><br><span class="line"><span class="comment"> * <span class="doctag">@return</span> false if command socket should continue to be read from, or</span></span><br><span class="line"><span class="comment"> * true if an end-of-file has been encountered.</span></span><br><span class="line"><span class="comment"> * <span class="doctag">@throws</span> Zygote.MethodAndArgsCaller trampoline to invoke main()</span></span><br><span class="line"><span class="comment"> * method in child process</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="function"><span class="keyword">boolean</span> <span class="title">runOnce</span><span class="params">(ZygoteServer zygoteServer)</span> <span class="keyword">throws</span> Zygote.MethodAndArgsCaller </span>&#123;</span><br><span class="line">    ......<span class="comment">// 很长，省略很多</span></span><br><span class="line">    <span class="keyword">try</span> &#123; <span class="comment">// 从socket中读取出参数信息，然后解析</span></span><br><span class="line">        parsedArgs = <span class="keyword">new</span> Arguments(args);</span><br><span class="line">        ......</span><br><span class="line">        pid = Zygote.forkAndSpecialize(parsedArgs.uid, parsedArgs.gid, parsedArgs.gids,</span><br><span class="line">                parsedArgs.debugFlags, rlimits, parsedArgs.mountExternal, parsedArgs.seInfo,</span><br><span class="line">                parsedArgs.niceName, fdsToClose, fdsToIgnore, parsedArgs.instructionSet,</span><br><span class="line">                parsedArgs.appDataDir);</span><br><span class="line">    &#125; <span class="keyword">catch</span> (ErrnoException ex) &#123;</span><br><span class="line">        logAndPrintError(newStderr, <span class="string">"Exception creating pipe"</span>, ex);</span><br><span class="line">    &#125; <span class="keyword">catch</span> (IllegalArgumentException ex) &#123;</span><br><span class="line">        logAndPrintError(newStderr, <span class="string">"Invalid zygote arguments"</span>, ex);</span><br><span class="line">    &#125; <span class="keyword">catch</span> (ZygoteSecurityException ex) &#123;</span><br><span class="line">        logAndPrintError(newStderr,</span><br><span class="line">                <span class="string">"Zygote security policy prevents request: "</span>, ex);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">try</span> &#123;</span><br><span class="line">        <span class="keyword">if</span> (pid == <span class="number">0</span>) &#123;</span><br><span class="line">            <span class="comment">// in child</span></span><br><span class="line">            zygoteServer.closeServerSocket();</span><br><span class="line">            IoUtils.closeQuietly(serverPipeFd);</span><br><span class="line">            serverPipeFd = <span class="keyword">null</span>;</span><br><span class="line">            handleChildProc(parsedArgs, descriptors, childPipeFd, newStderr);</span><br><span class="line">            <span class="comment">// should never get here, the child is expected to either</span></span><br><span class="line">            <span class="comment">// throw Zygote.MethodAndArgsCaller or exec(). 已抛出异常</span></span><br><span class="line">            <span class="keyword">return</span> <span class="keyword">true</span>;</span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">            <span class="comment">// in parent...pid of &lt; 0 means failure</span></span><br><span class="line">            IoUtils.closeQuietly(childPipeFd);</span><br><span class="line">            childPipeFd = <span class="keyword">null</span>;</span><br><span class="line">            <span class="keyword">return</span> handleParentProc(pid, descriptors, serverPipeFd, parsedArgs);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125; <span class="keyword">finally</span> &#123;</span><br><span class="line">        IoUtils.closeQuietly(childPipeFd);</span><br><span class="line">        IoUtils.closeQuietly(serverPipeFd);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>该方法比较长，参数准备好之后就直接调用<code>Zygote.forkAndSpecialize</code>来创建进程了，该方法和<code>forkSystemServer</code>差不多， 只是创建进程调用的是<code>nativeForkAndSpecialize</code>，但该本地方法最终还是调用<code>ForkAndSpecializeCommon</code>，这就回到了同<code>SystemServer</code>进程创建相同的地方，就不再分析。下面看下创建成功后的后续工作：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * Handles post-fork setup of child proc, closing sockets as appropriate,</span></span><br><span class="line"><span class="comment"> * reopen stdio as appropriate, and ultimately throwing MethodAndArgsCaller</span></span><br><span class="line"><span class="comment"> * if successful or returning if failed.</span></span><br><span class="line"><span class="comment"> *</span></span><br><span class="line"><span class="comment"> * <span class="doctag">@param</span> parsedArgs non-null; zygote args</span></span><br><span class="line"><span class="comment"> * <span class="doctag">@param</span> descriptors null-ok; new file descriptors for stdio if available.</span></span><br><span class="line"><span class="comment"> * <span class="doctag">@param</span> pipeFd null-ok; pipe for communication back to Zygote.</span></span><br><span class="line"><span class="comment"> * <span class="doctag">@param</span> newStderr null-ok; stream to use for stderr until stdio</span></span><br><span class="line"><span class="comment"> * is reopened.</span></span><br><span class="line"><span class="comment"> *</span></span><br><span class="line"><span class="comment"> * <span class="doctag">@throws</span> Zygote.MethodAndArgsCaller on success to</span></span><br><span class="line"><span class="comment"> * trampoline to code that invokes static main.</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">void</span> <span class="title">handleChildProc</span><span class="params">(Arguments parsedArgs,</span></span></span><br><span class="line"><span class="function"><span class="params">        FileDescriptor[] descriptors, FileDescriptor pipeFd, PrintStream newStderr)</span></span></span><br><span class="line"><span class="function">        <span class="keyword">throws</span> Zygote.MethodAndArgsCaller </span>&#123;</span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * By the time we get here, the native code has closed the two actual Zygote</span></span><br><span class="line"><span class="comment">     * socket connections, and substituted /dev/null in their place.  The LocalSocket</span></span><br><span class="line"><span class="comment">     * objects still need to be closed properly.</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    closeSocket(); <span class="comment">// 关闭socket</span></span><br><span class="line">    <span class="keyword">if</span> (descriptors != <span class="keyword">null</span>) &#123; <span class="comment">// 重新打开stdio</span></span><br><span class="line">        <span class="keyword">try</span> &#123;</span><br><span class="line">            Os.dup2(descriptors[<span class="number">0</span>], STDIN_FILENO);</span><br><span class="line">            Os.dup2(descriptors[<span class="number">1</span>], STDOUT_FILENO);</span><br><span class="line">            Os.dup2(descriptors[<span class="number">2</span>], STDERR_FILENO);</span><br><span class="line">            <span class="keyword">for</span> (FileDescriptor fd: descriptors) &#123;</span><br><span class="line">                IoUtils.closeQuietly(fd);</span><br><span class="line">            &#125;</span><br><span class="line">            newStderr = System.err;</span><br><span class="line">        &#125; <span class="keyword">catch</span> (ErrnoException ex) &#123;</span><br><span class="line">            Log.e(TAG, <span class="string">"Error reopening stdio"</span>, ex);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">if</span> (parsedArgs.niceName != <span class="keyword">null</span>) &#123; <span class="comment">// 设置进程名称</span></span><br><span class="line">        Process.setArgV0(parsedArgs.niceName);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">// End of the postFork event.</span></span><br><span class="line">    Trace.traceEnd(Trace.TRACE_TAG_ACTIVITY_MANAGER);</span><br><span class="line">    <span class="keyword">if</span> (parsedArgs.invokeWith != <span class="keyword">null</span>) &#123; <span class="comment">// 特殊情况下执行</span></span><br><span class="line">        WrapperInit.execApplication(parsedArgs.invokeWith,</span><br><span class="line">                parsedArgs.niceName, parsedArgs.targetSdkVersion,</span><br><span class="line">                VMRuntime.getCurrentInstructionSet(),</span><br><span class="line">                pipeFd, parsedArgs.remainingArgs);</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;<span class="comment">// 正常情况下执行</span></span><br><span class="line">        ZygoteInit.zygoteInit(parsedArgs.targetSdkVersion,</span><br><span class="line">                parsedArgs.remainingArgs, <span class="keyword">null</span> <span class="comment">/* classLoader */</span>);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>该方法的最后一步和<code>SystemServer</code>最后执行的是相同的，正常情况下是执行<code>ZygoteInit.zygoteInit</code>方法，启动对应的main方法，应用程序启动都是调用<code>ActivityThread.main</code>方法。但这次分析上面没有分析的<code>WrapperInit.execApplication</code>方法，找到进程最终的main入口。</p>
+<blockquote>
+<p>每一个应用程序启动是<code>ActivityManagerService</code>控制的，最后通过<code>ZygoteProcess</code>类中的静态方法完成参数设置，并通过socket传递命令给Zygote进程，然后就是上面的<code>runSelectLoop</code>方法读取命令来执行这一系列进程创建过程。</p>
+</blockquote>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * Executes a runtime application with a wrapper command.</span></span><br><span class="line"><span class="comment"> * This method never returns.</span></span><br><span class="line"><span class="comment"> * </span></span><br><span class="line"><span class="comment"> * <span class="doctag">@param</span> invokeWith The wrapper command.</span></span><br><span class="line"><span class="comment"> * <span class="doctag">@param</span> niceName The nice name for the application, or null if none.</span></span><br><span class="line"><span class="comment"> * <span class="doctag">@param</span> targetSdkVersion The target SDK version for the app.</span></span><br><span class="line"><span class="comment"> * <span class="doctag">@param</span> pipeFd The pipe to which the application's pid should be written, or null if none.</span></span><br><span class="line"><span class="comment"> * <span class="doctag">@param</span> args Arguments for &#123;<span class="doctag">@link</span> RuntimeInit#main&#125;.</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">execApplication</span><span class="params">(String invokeWith, String niceName,</span></span></span><br><span class="line"><span class="function"><span class="params">        <span class="keyword">int</span> targetSdkVersion, String instructionSet, FileDescriptor pipeFd,</span></span></span><br><span class="line"><span class="function"><span class="params">        String[] args)</span> </span>&#123;</span><br><span class="line">    StringBuilder command = <span class="keyword">new</span> StringBuilder(invokeWith);</span><br><span class="line">    <span class="keyword">final</span> String appProcess;</span><br><span class="line">    <span class="keyword">if</span> (VMRuntime.is64BitInstructionSet(instructionSet)) &#123;</span><br><span class="line">        appProcess = <span class="string">"/system/bin/app_process64"</span>;</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        appProcess = <span class="string">"/system/bin/app_process32"</span>;</span><br><span class="line">    &#125;</span><br><span class="line">    command.append(<span class="string">' '</span>);</span><br><span class="line">    command.append(appProcess);</span><br><span class="line">    command.append(<span class="string">" /system/bin --application"</span>);</span><br><span class="line">    <span class="keyword">if</span> (niceName != <span class="keyword">null</span>) &#123;</span><br><span class="line">        command.append(<span class="string">" '--nice-name="</span>).append(niceName).append(<span class="string">"'"</span>);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">// 这行代码是重点，WrapperInit被作为参数传入</span></span><br><span class="line">    command.append(<span class="string">" com.android.internal.os.WrapperInit "</span>);</span><br><span class="line">    command.append(pipeFd != <span class="keyword">null</span> ? pipeFd.getInt$() : <span class="number">0</span>);</span><br><span class="line">    command.append(<span class="string">' '</span>);</span><br><span class="line">    command.append(targetSdkVersion);</span><br><span class="line">    Zygote.appendQuotedShellArgs(command, args);</span><br><span class="line">    preserveCapabilities();</span><br><span class="line">    Zygote.execShell(command.toString());</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>这个方法拼接命令参数，然后调用<code>Zygote.execShell</code>，该方法最终调用系统<code>exec</code>族中的某个方法去执行<code>/system/bin/sh -c &lt;command&gt;</code>命令，一层层调用推进，最终在<code>libcore/luni/src/main/native/libcore_io_Linux.Linux_execv</code>方法中调用了系统方法<code>execv</code>来执行。<code>exec</code>系列系统方法的作用就是在fork出新进程之后，将新进程从父进程剥离开来，为新进程开辟新的空间，执行新进程自己的代码。这就和Linux系统传统的创建进程方法是相同的。</p>
+<p>通过代码，大体能知道拼接的命令是：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">&lt;invoke值&gt; /system/bin/app_process /system/bin --application --nice-name=&lt;名称&gt; com.android.internal.os.WrapperInit &lt;pipeFd&gt; &lt;targetSdk&gt; &lt;其他参数&gt;</span><br></pre></td></tr></table></figure>
+<p>看到这个命令，感觉有点眼熟？就和<code>Zygote</code>启动的命令相似，命令程序、目录及后面的参数都差不多。既然执行命令的程序是一个，那就又回到了<code>/frameworks/base/cmds/app_process/app_main.cpp</code>中，这里再回顾下其main函数：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">int</span> <span class="title">main</span><span class="params">(<span class="keyword">int</span> argc, <span class="keyword">char</span>* <span class="keyword">const</span> argv[])</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    <span class="keyword">bool</span> zygote = <span class="literal">false</span>;</span><br><span class="line">    <span class="keyword">bool</span> startSystemServer = <span class="literal">false</span>;</span><br><span class="line">    <span class="keyword">bool</span> application = <span class="literal">false</span>;</span><br><span class="line">    String8 niceName;</span><br><span class="line">    String8 className;</span><br><span class="line"></span><br><span class="line">    ++i;  <span class="comment">// Skip unused "parent dir" argument.</span></span><br><span class="line">    <span class="keyword">while</span> (i &lt; argc) &#123;</span><br><span class="line">        <span class="keyword">const</span> <span class="keyword">char</span>* arg = argv[i++];</span><br><span class="line">        <span class="keyword">if</span> (<span class="built_in">strcmp</span>(arg, <span class="string">"--zygote"</span>) == <span class="number">0</span>) &#123;</span><br><span class="line">            zygote = <span class="literal">true</span>;</span><br><span class="line">            niceName = ZYGOTE_NICE_NAME;</span><br><span class="line">        &#125; <span class="keyword">else</span> <span class="keyword">if</span> (<span class="built_in">strcmp</span>(arg, <span class="string">"--start-system-server"</span>) == <span class="number">0</span>) &#123;</span><br><span class="line">            startSystemServer = <span class="literal">true</span>;</span><br><span class="line">        &#125; <span class="keyword">else</span> <span class="keyword">if</span> (<span class="built_in">strcmp</span>(arg, <span class="string">"--application"</span>) == <span class="number">0</span>) &#123;</span><br><span class="line">            application = <span class="literal">true</span>;</span><br><span class="line">        &#125; <span class="keyword">else</span> <span class="keyword">if</span> (<span class="built_in">strncmp</span>(arg, <span class="string">"--nice-name="</span>, <span class="number">12</span>) == <span class="number">0</span>) &#123;</span><br><span class="line">            niceName.setTo(arg + <span class="number">12</span>);</span><br><span class="line">        &#125; <span class="keyword">else</span> <span class="keyword">if</span> (<span class="built_in">strncmp</span>(arg, <span class="string">"--"</span>, <span class="number">2</span>) != <span class="number">0</span>) &#123;</span><br><span class="line">            <span class="comment">// 在这里，设置了className为com.android.internal.os.WrapperInit</span></span><br><span class="line">            className.setTo(arg);</span><br><span class="line">            <span class="keyword">break</span>;<span class="comment">// 退出循环</span></span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">            --i;</span><br><span class="line">            <span class="keyword">break</span>;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    Vector&lt;String8&gt; args;</span><br><span class="line">    <span class="keyword">if</span> (!className.isEmpty()) &#123;</span><br><span class="line">        <span class="comment">// We're not in zygote mode, the only argument we need to pass</span></span><br><span class="line">        <span class="comment">// to RuntimeInit is the application argument.</span></span><br><span class="line">        <span class="comment">//</span></span><br><span class="line">        <span class="comment">// The Remainder of args get passed to startup class main(). Make</span></span><br><span class="line">        <span class="comment">// copies of them before we overwrite them with the process name.</span></span><br><span class="line">        args.add(application ? String8(<span class="string">"application"</span>) : String8(<span class="string">"tool"</span>));</span><br><span class="line">        <span class="comment">// 保存类及参数</span></span><br><span class="line">        runtime.setClassNameAndArgs(className, argc - i, argv + i);</span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span> (!LOG_NDEBUG) &#123;</span><br><span class="line">          String8 restOfArgs;</span><br><span class="line">          <span class="keyword">char</span>* <span class="keyword">const</span>* argv_new = argv + i;</span><br><span class="line">          <span class="keyword">int</span> argc_new = argc - i;</span><br><span class="line">          <span class="keyword">for</span> (<span class="keyword">int</span> k = <span class="number">0</span>; k &lt; argc_new; ++k) &#123;</span><br><span class="line">            restOfArgs.append(<span class="string">"\""</span>);</span><br><span class="line">            restOfArgs.append(argv_new[k]);</span><br><span class="line">            restOfArgs.append(<span class="string">"\" "</span>);</span><br><span class="line">          &#125;</span><br><span class="line">          ALOGV(<span class="string">"Class name = %s, args = %s"</span>, className.<span class="built_in">string</span>(), restOfArgs.<span class="built_in">string</span>());</span><br><span class="line">        &#125;</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        <span class="comment">// We're in zygote mode.</span></span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (!niceName.isEmpty()) &#123;</span><br><span class="line">        runtime.setArgv0(niceName.<span class="built_in">string</span>(), <span class="literal">true</span> <span class="comment">/* setProcName */</span>);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (zygote) &#123;</span><br><span class="line">        runtime.start(<span class="string">"com.android.internal.os.ZygoteInit"</span>, args, zygote);</span><br><span class="line">    &#125; <span class="keyword">else</span> <span class="keyword">if</span> (className) &#123;</span><br><span class="line">      <span class="comment">// AndroidRuntime.start启动DVM、注册本地方法，然后启动RuntimeInit.main</span></span><br><span class="line">        runtime.start(<span class="string">"com.android.internal.os.RuntimeInit"</span>, args, zygote);</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>解析完参数，最后<code>runtime.start</code>同启动<code>zygote</code>一样，也是三步，最终调用<code>RuntimeInit.main</code>方法。这个main方法比较简单，和<code>ZygoteInit.zygoteInit</code>部分相似，也是一些初始化工作。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String[] argv)</span> </span>&#123;</span><br><span class="line">    enableDdms();</span><br><span class="line">    <span class="keyword">if</span> (argv.length == <span class="number">2</span> &amp;&amp; argv[<span class="number">1</span>].equals(<span class="string">"application"</span>)) &#123;</span><br><span class="line">        <span class="keyword">if</span> (DEBUG) Slog.d(TAG, <span class="string">"RuntimeInit: Starting application"</span>);</span><br><span class="line">        redirectLogStreams();<span class="comment">// 同样执行该方法</span></span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        <span class="keyword">if</span> (DEBUG) Slog.d(TAG, <span class="string">"RuntimeInit: Starting tool"</span>);</span><br><span class="line">    &#125;</span><br><span class="line">    commonInit(); <span class="comment">// 同样执行该方法</span></span><br><span class="line">    <span class="comment">/*</span></span><br><span class="line"><span class="comment">     * Now that we're running in interpreted code, call back into native code</span></span><br><span class="line"><span class="comment">     * to run the system.</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="comment">// 这个本地方法时关键</span></span><br><span class="line">    nativeFinishInit();</span><br><span class="line">    <span class="keyword">if</span> (DEBUG) Slog.d(TAG, <span class="string">"Leaving RuntimeInit!"</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>乍一看，代码里面没有要启动<code>WrapperInit.main</code>代码，关键的地方就是最后的<code>nativeFinishInit</code>方法，该方法实现同样是在<code>AndroidRuntime.cpp</code>中，就一行代码去回调runtime实例的<code>onStarted</code>方法，在<code>AppRuntime</code>类中，再回到<code>/frameworks/base/cmds/app_process/app_main.cpp</code>文件中，在其main方法中，runtime对象是将类和参数保存了下来，来看下<code>AppRuntime</code>的两个回调方法：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">virtual</span> <span class="keyword">void</span> <span class="title">onVmCreated</span><span class="params">(JNIEnv* env)</span></span></span><br><span class="line"><span class="function">   </span>&#123;</span><br><span class="line">       <span class="keyword">if</span> (mClassName.isEmpty()) &#123;</span><br><span class="line">           <span class="keyword">return</span>; <span class="comment">// Zygote. Nothing to do here.</span></span><br><span class="line">       &#125;</span><br><span class="line"></span><br><span class="line">       <span class="comment">/*</span></span><br><span class="line"><span class="comment">        * This is a little awkward because the JNI FindClass call uses the</span></span><br><span class="line"><span class="comment">        * class loader associated with the native method we're executing in.</span></span><br><span class="line"><span class="comment">        * If called in onStarted (from RuntimeInit.finishInit because we're</span></span><br><span class="line"><span class="comment">        * launching "am", for example), FindClass would see that we're calling</span></span><br><span class="line"><span class="comment">        * from a boot class' native method, and so wouldn't look for the class</span></span><br><span class="line"><span class="comment">        * we're trying to look up in CLASSPATH. Unfortunately it needs to,</span></span><br><span class="line"><span class="comment">        * because the "am" classes are not boot classes.</span></span><br><span class="line"><span class="comment">        *</span></span><br><span class="line"><span class="comment">        * The easiest fix is to call FindClass here, early on before we start</span></span><br><span class="line"><span class="comment">        * executing boot class Java code and thereby deny ourselves access to</span></span><br><span class="line"><span class="comment">        * non-boot classes.</span></span><br><span class="line"><span class="comment">        */</span></span><br><span class="line">       <span class="keyword">char</span>* slashClassName = toSlashClassName(mClassName.<span class="built_in">string</span>());</span><br><span class="line">       mClass = env-&gt;FindClass(slashClassName); <span class="comment">// 找到该类</span></span><br><span class="line">       <span class="keyword">if</span> (mClass == <span class="literal">NULL</span>) &#123;</span><br><span class="line">           ALOGE(<span class="string">"ERROR: could not find class '%s'\n"</span>, mClassName.<span class="built_in">string</span>());</span><br><span class="line">       &#125;</span><br><span class="line">       <span class="built_in">free</span>(slashClassName);</span><br><span class="line"></span><br><span class="line">       mClass = <span class="keyword">reinterpret_cast</span>&lt;jclass&gt;(env-&gt;NewGlobalRef(mClass));</span><br><span class="line">   &#125;</span><br><span class="line"></span><br><span class="line">   <span class="function"><span class="keyword">virtual</span> <span class="keyword">void</span> <span class="title">onStarted</span><span class="params">()</span></span></span><br><span class="line"><span class="function">   </span>&#123;</span><br><span class="line">       sp&lt;ProcessState&gt; proc = ProcessState::self();</span><br><span class="line">       ALOGV(<span class="string">"App process: starting thread pool.\n"</span>);</span><br><span class="line">       proc-&gt;startThreadPool();</span><br><span class="line"></span><br><span class="line">       AndroidRuntime* ar = AndroidRuntime::getRuntime();</span><br><span class="line">       ar-&gt;callMain(mClassName, mClass, mArgs);</span><br><span class="line"></span><br><span class="line">       IPCThreadState::self()-&gt;stopProcess();</span><br><span class="line">       hardware::IPCThreadState::self()-&gt;stopProcess();</span><br><span class="line">   &#125;</span><br></pre></td></tr></table></figure>
+<p>在<code>onVmCreated</code>回调中根据类名反射获取到类对象，在<code>onStarted</code>中调用了该类的main方法。从这里就进入了<code>WrapperInit.main</code>方法，代码逻辑设计很巧妙，一环套一环，又回到了原点。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 通过wrapper process启动应用才会执行到这里</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String[] args)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">try</span> &#123;</span><br><span class="line">        ......</span><br><span class="line">        <span class="comment">// Mimic system Zygote preloading. 预加载公共类和资源</span></span><br><span class="line">        ZygoteInit.preload(<span class="keyword">new</span> BootTimingsTraceLog(<span class="string">"WrapperInitTiming"</span>,</span><br><span class="line">                Trace.TRACE_TAG_DALVIK));</span><br><span class="line">        <span class="comment">// Launch the application. </span></span><br><span class="line">        String[] runtimeArgs = <span class="keyword">new</span> String[args.length - <span class="number">2</span>];</span><br><span class="line">        System.arraycopy(args, <span class="number">2</span>, runtimeArgs, <span class="number">0</span>, runtimeArgs.length);</span><br><span class="line">        WrapperInit.wrapperInit(targetSdkVersion, runtimeArgs);</span><br><span class="line">    &#125; <span class="keyword">catch</span> (Zygote.MethodAndArgsCaller caller) &#123;</span><br><span class="line">        caller.run();<span class="comment">// 捕获异常，并执行ActivityThread.main方法</span></span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">// 创建ClassLoader，然后和正常创建其他子进程一样，执行applicationInit方法，最后抛出异常</span></span><br><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">wrapperInit</span><span class="params">(<span class="keyword">int</span> targetSdkVersion, String[] argv)</span></span></span><br><span class="line"><span class="function">        <span class="keyword">throws</span> Zygote.MethodAndArgsCaller </span>&#123;</span><br><span class="line">    <span class="comment">// Check whether the first argument is a "-cp" in argv, and assume the next argument is the</span></span><br><span class="line">    <span class="comment">// classpath. If found, create a PathClassLoader and use it for applicationInit.</span></span><br><span class="line">    ClassLoader classLoader = <span class="keyword">null</span>;</span><br><span class="line">    <span class="keyword">if</span> (argv != <span class="keyword">null</span> &amp;&amp; argv.length &gt; <span class="number">2</span> &amp;&amp; argv[<span class="number">0</span>].equals(<span class="string">"-cp"</span>)) &#123;</span><br><span class="line">        classLoader = ZygoteInit.createPathClassLoader(argv[<span class="number">1</span>], targetSdkVersion);</span><br><span class="line">        <span class="comment">// Install this classloader as the context classloader, too.</span></span><br><span class="line">        Thread.currentThread().setContextClassLoader(classLoader);</span><br><span class="line">        <span class="comment">// Remove the classpath from the arguments.</span></span><br><span class="line">        String removedArgs[] = <span class="keyword">new</span> String[argv.length - <span class="number">2</span>];</span><br><span class="line">        System.arraycopy(argv, <span class="number">2</span>, removedArgs, <span class="number">0</span>, argv.length - <span class="number">2</span>);</span><br><span class="line">        argv = removedArgs;</span><br><span class="line">    &#125;</span><br><span class="line">    RuntimeInit.applicationInit(targetSdkVersion, argv, classLoader);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>后面就和前面分析<code>SystemServer</code>创建是一样的了，简单的区别就是<code>SystemServer</code>进程执行<code>SystemServer.main</code>，普通应用从<code>ActivityThread.main</code>开始。</p>
+<h2 id="小结"><a href="#小结" class="headerlink" title="小结"></a>小结</h2><p>整个Zygote进程的作用基本分析完了，个别细节或许不太详细，但重要的点基本都有。主要工作就三个：</p>
+<ul>
+<li>预加载公共类和资源</li>
+<li>创建<code>SystemServer</code></li>
+<li>创建其他应用程序</li>
+</ul>
+<p>下面再总结下子进程创建的一些区别或注意点：</p>
+<ol>
+<li><code>SystemServer</code>在系统启动或者说<code>zygote</code>进程创建时就紧接着创建了，而应用进程需要在某些情况下被创建，因此<code>zygote</code>进程进入死循环，通过socket来获取命令来创建应用进程。</li>
+<li>上面的代码可以看到，进程创建有两种方式，一种是正常的，另一种是wrapper方式，wrapper方式通过invoke-with参数控制。wrapper方式是按照Linux正常的创建流程即fork+exec，而正常方式则没有exec。</li>
+<li>正常方式最后执行<code>ZygoteInit.zygoteInit</code>方法进行初始化及进程入口调用；而wrapper方式则通过exec复制出新进程空间，而后回到了<code>app_main.cpp</code>中，“重走”<code>zygote</code>创建流程，较为复杂。</li>
+</ol>
+
+      
+    </div>
+    
+    
+    
+
+    
+
+    
+
+    
+
+    <footer class="post-footer">
+      
+        <div class="post-tags">
+          
+            <a href="/tags/Android/" rel="tag"># Android</a>
+          
+            <a href="/tags/源码分析/" rel="tag"># 源码分析</a>
+          
+            <a href="/tags/Zygote/" rel="tag"># Zygote</a>
+          
+        </div>
+      
+
+      
+      
+      
+
+      
+        <div class="post-nav">
+          <div class="post-nav-next post-nav-item">
+            
+              <a href="/post/android-startup/" rel="next" title="Android启动过程分析">
+                <i class="fa fa-chevron-left"></i> Android启动过程分析
+              </a>
+            
+          </div>
+
+          <span class="post-nav-divider"></span>
+
+          <div class="post-nav-prev post-nav-item">
+            
+              <a href="/post/zygote-sequence-diagram/" rel="prev" title="Zygote进程分析（后记）">
+                Zygote进程分析（后记） <i class="fa fa-chevron-right"></i>
+              </a>
+            
+          </div>
+        </div>
+      
+
+      
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+
+    <div class="post-spread">
+      
+    </div>
+  </div>
+
+
+          </div>
+          
+
+
+          
+
+  
+
+
+
+        </div>
+        
+          
+  
+  <div class="sidebar-toggle">
+    <div class="sidebar-toggle-line-wrap">
+      <span class="sidebar-toggle-line sidebar-toggle-line-first"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-middle"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-last"></span>
+    </div>
+  </div>
+
+  <aside id="sidebar" class="sidebar">
+    
+    <div class="sidebar-inner">
+
+      
+
+      
+        <ul class="sidebar-nav motion-element">
+          <li class="sidebar-nav-toc sidebar-nav-active" data-target="post-toc-wrap">
+            文章目录
+          </li>
+          <li class="sidebar-nav-overview" data-target="site-overview-wrap">
+            站点概览
+          </li>
+        </ul>
+      
+
+      <section class="site-overview-wrap sidebar-panel">
+        <div class="site-overview">
+          <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+            
+              <p class="site-author-name" itemprop="name">YMlion</p>
+              <p class="site-description motion-element" itemprop="description">业精于勤，荒于嬉；行成于思，毁于随。</p>
+          </div>
+
+          <nav class="site-state motion-element">
+
+            
+              <div class="site-state-item site-state-posts">
+              
+                <a href="/archives/">
+              
+                  <span class="site-state-item-count">10</span>
+                  <span class="site-state-item-name">日志</span>
+                </a>
+              </div>
+            
+
+            
+              
+              
+              <div class="site-state-item site-state-categories">
+                <a href="/categories/index.html">
+                  <span class="site-state-item-count">3</span>
+                  <span class="site-state-item-name">分类</span>
+                </a>
+              </div>
+            
+
+            
+              
+              
+              <div class="site-state-item site-state-tags">
+                <a href="/tags/index.html">
+                  <span class="site-state-item-count">10</span>
+                  <span class="site-state-item-name">标签</span>
+                </a>
+              </div>
+            
+
+          </nav>
+
+          
+            <div class="feed-link motion-element">
+              <a href="/atom.xml" rel="alternate">
+                <i class="fa fa-rss"></i>
+                RSS
+              </a>
+            </div>
+          
+
+          <div class="links-of-author motion-element">
+            
+              
+                <span class="links-of-author-item">
+                  <a href="https://github.com/YMlion" target="_blank" title="GitHub">
+                    
+                      <i class="fa fa-fw fa-github"></i>GitHub</a>
+                </span>
+              
+                <span class="links-of-author-item">
+                  <a href="mailto:lmion.yao@gmail.com" target="_blank" title="E-Mail">
+                    
+                      <i class="fa fa-fw fa-envelope"></i>E-Mail</a>
+                </span>
+              
+            
+          </div>
+
+          
+          
+
+          
+          
+
+          
+
+        </div>
+      </section>
+
+      
+      <!--noindex-->
+        <section class="post-toc-wrap motion-element sidebar-panel sidebar-panel-active">
+          <div class="post-toc">
+
+            
+              
+            
+
+            
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#预加载公共类和资源"><span class="nav-number">1.</span> <span class="nav-text">预加载公共类和资源</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#启动SystemServer"><span class="nav-number">2.</span> <span class="nav-text">启动SystemServer</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#fork子进程"><span class="nav-number">3.</span> <span class="nav-text">fork子进程</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#小结"><span class="nav-number">4.</span> <span class="nav-text">小结</span></a></li></ol></div>
+            
+
+          </div>
+        </section>
+      <!--/noindex-->
+      
+
+      
+
+    </div>
+  </aside>
+
+
+        
+      </div>
+    </main>
+
+    <footer id="footer" class="footer">
+      <div class="footer-inner">
+        <div class="copyright">&copy; 2015 &mdash; <span itemprop="copyrightYear">2018</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">YMlion</span>
+
+  
+</div>
+
+
+  <div class="powered-by">由 <a class="theme-link" target="_blank" href="https://hexo.io">Hexo</a> 强力驱动</div>
+
+
+
+  <span class="post-meta-divider">|</span>
+
+
+
+  <div class="theme-info">主题 &mdash; <a class="theme-link" target="_blank" href="https://github.com/iissnan/hexo-theme-next">NexT.Pisces</a></div>
+
+
+
+
+        
+<div class="busuanzi-count">
+  <script async src="https://dn-lbstatics.qbox.me/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+  
+    <span class="site-uv">
+      <i class="fa fa-user"></i>
+      <span class="busuanzi-value" id="busuanzi_value_site_uv"></span>
+      
+    </span>
+  
+
+  
+    <span class="site-pv">
+      <i class="fa fa-eye"></i>
+      <span class="busuanzi-value" id="busuanzi_value_site_pv"></span>
+      
+    </span>
+  
+</div>
+
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+
+    
+      <div class="back-to-top">
+        <i class="fa fa-arrow-up"></i>
+        
+      </div>
+    
+
+    
+
+  </div>
+
+  
+
+<script type="text/javascript">
+  if (Object.prototype.toString.call(window.Promise) !== '[object Function]') {
+    window.Promise = null;
+  }
+</script>
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+    <script type="text/javascript" src="/lib/jquery/index.js?v=2.1.3"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/fastclick/lib/fastclick.min.js?v=1.0.6"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/jquery_lazyload/jquery.lazyload.js?v=1.9.7"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/fancybox/source/jquery.fancybox.pack.js?v=2.1.5"></script>
+  
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/utils.js?v=5.1.3"></script>
+
+  <script type="text/javascript" src="/js/src/motion.js?v=5.1.3"></script>
+
+
+
+  
+  
+
+
+  <script type="text/javascript" src="/js/src/affix.js?v=5.1.3"></script>
+
+  <script type="text/javascript" src="/js/src/schemes/pisces.js?v=5.1.3"></script>
+
+
+
+  
+  <script type="text/javascript" src="/js/src/scrollspy.js?v=5.1.3"></script>
+<script type="text/javascript" src="/js/src/post-details.js?v=5.1.3"></script>
+
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/bootstrap.js?v=5.1.3"></script>
+
+
+
+  
+
+
+  
+
+
+
+
+	
+
+
+
+
+
+  
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+
+  
+
+  
+
+  
+
+  
+  
+
+  
+
+  
+
+  
+
+</body>
+</html>

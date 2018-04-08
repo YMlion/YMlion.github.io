@@ -1,0 +1,845 @@
+<!DOCTYPE html>
+
+
+
+  
+
+
+<html class="theme-next pisces use-motion" lang="zh-Hans">
+<head>
+  <meta charset="UTF-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
+<meta name="theme-color" content="#222">
+
+
+
+
+
+
+
+
+
+<meta http-equiv="Cache-Control" content="no-transform" />
+<meta http-equiv="Cache-Control" content="no-siteapp" />
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+  <link href="/lib/fancybox/source/jquery.fancybox.css?v=2.1.5" rel="stylesheet" type="text/css" />
+
+
+
+
+
+
+
+<link href="/lib/font-awesome/css/font-awesome.min.css?v=4.6.2" rel="stylesheet" type="text/css" />
+
+<link href="/css/main.css?v=5.1.3" rel="stylesheet" type="text/css" />
+
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=5.1.3">
+
+
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=5.1.3">
+
+
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=5.1.3">
+
+
+  <link rel="mask-icon" href="/images/logo.svg?v=5.1.3" color="#222">
+
+
+
+
+
+  <meta name="keywords" content="Android,源码分析,插件化,VirtualAPK," />
+
+
+
+
+
+  <link rel="alternate" href="/atom.xml" title="YMlion's Blog" type="application/atom+xml" />
+
+
+
+
+
+
+<meta name="description" content="Service启动相对于activity来说，没有那么复杂，而且生命周期很简单，启动插件中的service，同样需要了解service启动流程及生命周期。service的启动流程相对简单，主要涉及ActivityManagerService和ActivityThread两个类，前者是service启动及生命周期控制类，">
+<meta name="keywords" content="Android,源码分析,插件化,VirtualAPK">
+<meta property="og:type" content="article">
+<meta property="og:title" content="VirtualAPK原理分析之Service启动">
+<meta property="og:url" content="https://ymlion.com/post/virtualapk-analysis-service/index.html">
+<meta property="og:site_name" content="YMlion&#39;s Blog">
+<meta property="og:description" content="Service启动相对于activity来说，没有那么复杂，而且生命周期很简单，启动插件中的service，同样需要了解service启动流程及生命周期。service的启动流程相对简单，主要涉及ActivityManagerService和ActivityThread两个类，前者是service启动及生命周期控制类，后者是service启动和生命周期的执行类。">
+<meta property="og:locale" content="zh-Hans">
+<meta property="og:updated_time" content="2018-04-08T03:49:50.109Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="VirtualAPK原理分析之Service启动">
+<meta name="twitter:description" content="Service启动相对于activity来说，没有那么复杂，而且生命周期很简单，启动插件中的service，同样需要了解service启动流程及生命周期。service的启动流程相对简单，主要涉及ActivityManagerService和ActivityThread两个类，前者是service启动及生命周期控制类，后者是service启动和生命周期的执行类。">
+
+
+
+<script type="text/javascript" id="hexo.configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Pisces',
+    version: '5.1.3',
+    sidebar: {"position":"left","display":"post","offset":12,"b2t":false,"scrollpercent":false,"onmobile":false},
+    fancybox: true,
+    tabs: true,
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    duoshuo: {
+      userId: '0',
+      author: '博主'
+    },
+    algolia: {
+      applicationID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    }
+  };
+</script>
+
+
+
+  <link rel="canonical" href="https://ymlion.com/post/virtualapk-analysis-service/"/>
+
+
+
+
+
+  <title>VirtualAPK原理分析之Service启动 | YMlion's Blog</title>
+  
+
+
+
+
+
+  <script type="text/javascript">
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?93ccb82075a783cf82b4e98bec7097e3";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" lang="zh-Hans">
+
+  
+  
+    
+  
+
+  <div class="container sidebar-position-left page-post-detail">
+    <div class="headband"></div>
+
+    <header id="header" class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-wrapper">
+  <div class="site-meta ">
+    
+
+    <div class="custom-logo-site-title">
+      <a href="/"  class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">YMlion's Blog</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+      
+        <p class="site-subtitle">写点什么</p>
+      
+  </div>
+
+  <div class="site-nav-toggle">
+    <button>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+    </button>
+  </div>
+</div>
+
+<nav class="site-nav">
+  
+
+  
+    <ul id="menu" class="menu">
+      
+        
+        <li class="menu-item menu-item-home">
+          <a href="/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-home"></i> <br />
+            
+            首页
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-tags">
+          <a href="/tags/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-tags"></i> <br />
+            
+            标签
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-categories">
+          <a href="/categories/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-th"></i> <br />
+            
+            分类
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-archives">
+          <a href="/archives/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-archive"></i> <br />
+            
+            归档
+          </a>
+        </li>
+      
+
+      
+    </ul>
+  
+
+  
+</nav>
+
+
+
+ </div>
+    </header>
+
+    <main id="main" class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          <div id="content" class="content">
+            
+
+  <div id="posts" class="posts-expand">
+    
+
+  
+
+  
+  
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="https://ymlion.com/post/virtualapk-analysis-service/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="YMlion">
+      <meta itemprop="description" content="">
+      <meta itemprop="image" content="/images/avatar.gif">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="YMlion's Blog">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">VirtualAPK原理分析之Service启动</h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">发表于</span>
+              
+              <time title="创建于" itemprop="dateCreated datePublished" datetime="2018-03-19T16:30:01+08:00">
+                2018-03-19
+              </time>
+            
+
+            
+
+            
+          </span>
+
+          
+            <span class="post-category" >
+            
+              <span class="post-meta-divider">|</span>
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">分类于</span>
+              
+              
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Android/" itemprop="url" rel="index">
+                    <span itemprop="name">Android</span>
+                  </a>
+                </span>
+
+                
+                
+                  ， 
+                
+              
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Android/插件化/" itemprop="url" rel="index">
+                    <span itemprop="name">插件化</span>
+                  </a>
+                </span>
+
+                
+                
+              
+            </span>
+          
+
+          
+            
+          
+
+          
+          
+
+          
+            <span class="post-meta-divider">|</span>
+            <span class="page-pv"><i class="fa fa-file-o"></i>
+            <span class="busuanzi-value" id="busuanzi_value_page_pv" ></span>
+            </span>
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        <p><a href="https://developer.android.google.cn/guide/components/services.html?hl=zh-cn" target="_blank" rel="noopener">Service</a>启动相对于activity来说，没有那么复杂，而且生命周期很简单，启动插件中的service，同样需要了解service启动流程及生命周期。service的启动流程相对简单，主要涉及<code>ActivityManagerService</code>和<code>ActivityThread</code>两个类，前者是service启动及生命周期控制类，后者是service启动和生命周期的执行类。</p>
+<a id="more"></a>
+<p>了解service的启动流程及生命周期后，能够发现和activity比较类似，那是否能够和activity插件化原理相同呢？通过实现的源码来看是不同的，至于为什么不同，在分析完源码之后再倒推原因。</p>
+<h3 id="预注册"><a href="#预注册" class="headerlink" title="预注册"></a>预注册</h3><figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">service</span> <span class="attr">android:name</span>=<span class="string">"com.didi.virtualapk.delegate.LocalService"</span> /&gt;</span></span><br><span class="line"><span class="comment">&lt;!-- Daemon Service running in child process --&gt;</span></span><br><span class="line"><span class="tag">&lt;<span class="name">service</span> <span class="attr">android:name</span>=<span class="string">"com.didi.virtualapk.delegate.RemoteService"</span> <span class="attr">android:process</span>=<span class="string">":daemon"</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">intent-filter</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;<span class="name">action</span> <span class="attr">android:name</span>=<span class="string">"$&#123;applicationId&#125;.intent.ACTION_DAEMON_SERVICE"</span> /&gt;</span></span><br><span class="line">    <span class="tag">&lt;/<span class="name">intent-filter</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">service</span>&gt;</span></span><br></pre></td></tr></table></figure>
+<p>在<code>CoreLibrary</code>的<code>AndroidManifest.xml</code>中预注册了两个service，对应于不同的进程，因为service在单独的进程中执行任务是比较常见的。<code>RemoteService</code>继承自<code>LocalService</code>，大部分逻辑都是在<code>LocalService</code>中进行。通过预注册可以知道，前期的逻辑和activity是一样的，都是“偷梁换柱”，下面就看下service启动是如何“偷梁换柱”。</p>
+<h3 id="hook-AMS"><a href="#hook-AMS" class="headerlink" title="hook AMS"></a>hook AMS</h3><p><a href="http://ymlion.com/post/virtualapk-analysis-2/">activity启动</a>的偷梁换柱主要是在<code>Instrumentation</code>中，在上一篇中其实也说过在<code>AMS</code>中也是可以的，activity和service一样，启动逻辑首先是在<code>AMS</code>中进行的。service启动涉及的类比较少，只能在<code>AMS</code>中做手脚。在<a href="http://ymlion.com/post/virtualapk-analysis-1/">加载分析</a>中说过，在一开始就hook了<code>AMS</code>，主要是用于service控制的，下面看下<code>ActivityManagerProxy</code>这个代理类的具体实现。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Override</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> Object <span class="title">invoke</span><span class="params">(Object proxy, Method method, Object[] args)</span> <span class="keyword">throws</span> Throwable </span>&#123;</span><br><span class="line">    <span class="keyword">if</span> (<span class="string">"startService"</span>.equals(method.getName())) &#123;</span><br><span class="line">        <span class="keyword">return</span> startService(proxy, method, args);</span><br><span class="line">    &#125; <span class="keyword">else</span> <span class="keyword">if</span> (<span class="string">"stopService"</span>.equals(method.getName())) &#123;</span><br><span class="line">        <span class="keyword">return</span> stopService(proxy, method, args);</span><br><span class="line">    &#125; <span class="keyword">else</span> <span class="keyword">if</span> (<span class="string">"stopServiceToken"</span>.equals(method.getName())) &#123;</span><br><span class="line">        <span class="keyword">return</span> stopServiceToken(proxy, method, args);</span><br><span class="line">    &#125; <span class="keyword">else</span> <span class="keyword">if</span> (<span class="string">"bindService"</span>.equals(method.getName())) &#123;</span><br><span class="line">        <span class="keyword">return</span> bindService(proxy, method, args);</span><br><span class="line">    &#125; <span class="keyword">else</span> <span class="keyword">if</span> (<span class="string">"unbindService"</span>.equals(method.getName())) &#123;</span><br><span class="line">        <span class="keyword">return</span> unbindService(proxy, method, args);</span><br><span class="line">    &#125; <span class="keyword">else</span> <span class="keyword">if</span> (<span class="string">"getIntentSender"</span>.equals(method.getName())) &#123;</span><br><span class="line">        getIntentSender(method, args);</span><br><span class="line">    &#125; <span class="keyword">else</span> <span class="keyword">if</span> (<span class="string">"overridePendingTransition"</span>.equals(method.getName()))&#123;</span><br><span class="line">        overridePendingTransition(method, args);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>上面代码省略了异常捕获及日志部分，整体总共拦截了7个方法，看下拦截之后的处理：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 在LocalService中定义的常量，源码是用RemoteService调用的</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">final</span> String EXTRA_TARGET = <span class="string">"target"</span>;</span><br><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">final</span> String EXTRA_COMMAND = <span class="string">"command"</span>;</span><br><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">final</span> String EXTRA_PLUGIN_LOCATION = <span class="string">"plugin_location"</span>;</span><br><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="keyword">int</span> EXTRA_COMMAND_START_SERVICE = <span class="number">1</span>;</span><br><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="keyword">int</span> EXTRA_COMMAND_STOP_SERVICE = <span class="number">2</span>;</span><br><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="keyword">int</span> EXTRA_COMMAND_BIND_SERVICE = <span class="number">3</span>;</span><br><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="keyword">int</span> EXTRA_COMMAND_UNBIND_SERVICE = <span class="number">4</span>;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">private</span> Object <span class="title">startService</span><span class="params">(Object proxy, Method method, Object[] args)</span> <span class="keyword">throws</span> Throwable </span>&#123;</span><br><span class="line">    IApplicationThread appThread = (IApplicationThread) args[<span class="number">0</span>];</span><br><span class="line">    Intent target = (Intent) args[<span class="number">1</span>];</span><br><span class="line">    ResolveInfo resolveInfo = <span class="keyword">this</span>.mPluginManager.resolveService(target, <span class="number">0</span>);</span><br><span class="line">    <span class="keyword">if</span> (<span class="keyword">null</span> == resolveInfo || <span class="keyword">null</span> == resolveInfo.serviceInfo) &#123;</span><br><span class="line">        <span class="comment">// is host service</span></span><br><span class="line">        <span class="keyword">return</span> method.invoke(<span class="keyword">this</span>.mActivityManager, args);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> startDelegateServiceForTarget(target, resolveInfo.serviceInfo, <span class="keyword">null</span>, RemoteService.EXTRA_COMMAND_START_SERVICE);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">private</span> Object <span class="title">bindService</span><span class="params">(Object proxy, Method method, Object[] args)</span> <span class="keyword">throws</span> Throwable </span>&#123;</span><br><span class="line">    Intent target = (Intent) args[<span class="number">2</span>];</span><br><span class="line">    ResolveInfo resolveInfo = <span class="keyword">this</span>.mPluginManager.resolveService(target, <span class="number">0</span>);</span><br><span class="line">    <span class="keyword">if</span> (<span class="keyword">null</span> == resolveInfo || <span class="keyword">null</span> == resolveInfo.serviceInfo) &#123;</span><br><span class="line">        <span class="comment">// is host service</span></span><br><span class="line">        <span class="keyword">return</span> method.invoke(<span class="keyword">this</span>.mActivityManager, args);</span><br><span class="line">    &#125;</span><br><span class="line">    Bundle bundle = <span class="keyword">new</span> Bundle();</span><br><span class="line">    PluginUtil.putBinder(bundle, <span class="string">"sc"</span>, (IBinder) args[<span class="number">4</span>]);</span><br><span class="line">    startDelegateServiceForTarget(target, resolveInfo.serviceInfo, bundle, RemoteService.EXTRA_COMMAND_BIND_SERVICE);</span><br><span class="line">    mPluginManager.getComponentsHandler().remberIServiceConnection((IBinder) args[<span class="number">4</span>], target);</span><br><span class="line">    <span class="keyword">return</span> <span class="number">1</span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">private</span> ComponentName <span class="title">startDelegateServiceForTarget</span><span class="params">(Intent target, ServiceInfo serviceInfo, Bundle extras, <span class="keyword">int</span> command)</span> </span>&#123;</span><br><span class="line">    Intent wrapperIntent = wrapperTargetIntent(target, serviceInfo, extras, command);</span><br><span class="line">    <span class="keyword">return</span> mPluginManager.getHostContext().startService(wrapperIntent);</span><br><span class="line">&#125;</span><br><span class="line"><span class="function"><span class="keyword">private</span> Intent <span class="title">wrapperTargetIntent</span><span class="params">(Intent target, ServiceInfo serviceInfo, Bundle extras, <span class="keyword">int</span> command)</span> </span>&#123;</span><br><span class="line">    <span class="comment">// fill in service with ComponentName</span></span><br><span class="line">    target.setComponent(<span class="keyword">new</span> ComponentName(serviceInfo.packageName, serviceInfo.name));</span><br><span class="line">    String pluginLocation = mPluginManager.getLoadedPlugin(target.getComponent()).getLocation();</span><br><span class="line">    <span class="comment">// start delegate service to run plugin service inside</span></span><br><span class="line">    <span class="keyword">boolean</span> local = PluginUtil.isLocalService(serviceInfo);</span><br><span class="line">    Class&lt;? extends Service&gt; delegate = local ? LocalService.class : RemoteService.class;</span><br><span class="line">    Intent intent = <span class="keyword">new</span> Intent();</span><br><span class="line">    intent.setClass(mPluginManager.getHostContext(), delegate);</span><br><span class="line">    intent.putExtra(RemoteService.EXTRA_TARGET, target);</span><br><span class="line">    intent.putExtra(RemoteService.EXTRA_COMMAND, command);</span><br><span class="line">    intent.putExtra(RemoteService.EXTRA_PLUGIN_LOCATION, pluginLocation);</span><br><span class="line">    <span class="keyword">if</span> (extras != <span class="keyword">null</span>) &#123;</span><br><span class="line">        intent.putExtras(extras);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> intent;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>主要看上面4个方法的实现，<code>stopService</code>、<code>stopServiceToken</code>、<code>unbindService</code>的实现和<code>startService</code>差不多，区别就是<code>startDelegateServiceForTarget</code>第4个参数不同，在最上面也把对应的常量列了出来。</p>
+<p><code>startService</code>和<code>bindService</code>及其他方法，在一开始也是判断当前的service是否是插件中的，如果不是则执行不处理，交由<code>AMS</code>自己处理；如果是插件service，则执行<code>startDelegateServiceForTarget</code>，首先调用<code>wrapperTargetIntent</code>来偷梁换柱，将插件service替换为预注册的<code>LocalService</code>或者<code>RemoteService</code>，最后再调用<code>Context.startService</code>启动预注册的service中的一个。</p>
+<p><code>bindService</code>和<code>startService</code>启动方式是不相同的，在这里处理时肯定也是不同的，<code>bindService</code>有一个参数<code>adnroid.content.ServiceConnection</code>，用于监听service状态，不可为<code>null</code>，在<code>android.app.ContextImpl</code>中看下该参数的作用：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">boolean</span> <span class="title">bindServiceCommon</span><span class="params">(Intent service, ServiceConnection conn, <span class="keyword">int</span> flags, Handler</span></span></span><br><span class="line"><span class="function"><span class="params">        handler, UserHandle user)</span> </span>&#123;</span><br><span class="line">    IServiceConnection sd;</span><br><span class="line">    <span class="keyword">if</span> (conn == <span class="keyword">null</span>) &#123;</span><br><span class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> IllegalArgumentException(<span class="string">"connection is null"</span>);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">if</span> (mPackageInfo != <span class="keyword">null</span>) &#123;<span class="comment">// 实例化IServiceConnection</span></span><br><span class="line">        sd = mPackageInfo.getServiceDispatcher(conn, getOuterContext(), handler, flags);</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> RuntimeException(<span class="string">"Not supported in system context"</span>);</span><br><span class="line">    &#125;</span><br><span class="line">    validateServiceIntent(service);</span><br><span class="line">    <span class="keyword">try</span> &#123;</span><br><span class="line">        IBinder token = getActivityToken();</span><br><span class="line">        <span class="keyword">if</span> (token == <span class="keyword">null</span> &amp;&amp; (flags&amp;BIND_AUTO_CREATE) == <span class="number">0</span> &amp;&amp; mPackageInfo != <span class="keyword">null</span></span><br><span class="line">                &amp;&amp; mPackageInfo.getApplicationInfo().targetSdkVersion</span><br><span class="line">                &lt; android.os.Build.VERSION_CODES.ICE_CREAM_SANDWICH) &#123;</span><br><span class="line">            flags |= BIND_WAIVE_PRIORITY;</span><br><span class="line">        &#125;</span><br><span class="line">        service.prepareToLeaveProcess(<span class="keyword">this</span>);</span><br><span class="line">        <span class="comment">// 调用AMS的bindService方法，sd作为第5个参数</span></span><br><span class="line">        <span class="keyword">int</span> res = ActivityManagerNative.getDefault().bindService(</span><br><span class="line">            mMainThread.getApplicationThread(), getActivityToken(), service,</span><br><span class="line">            service.resolveTypeIfNeeded(getContentResolver()),</span><br><span class="line">            sd, flags, getOpPackageName(), user.getIdentifier());</span><br><span class="line">        <span class="keyword">if</span> (res &lt; <span class="number">0</span>) &#123;</span><br><span class="line">            <span class="keyword">throw</span> <span class="keyword">new</span> SecurityException(</span><br><span class="line">                    <span class="string">"Not allowed to bind to service "</span> + service);</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">return</span> res != <span class="number">0</span>;</span><br><span class="line">    &#125; <span class="keyword">catch</span> (RemoteException e) &#123;</span><br><span class="line">        <span class="keyword">throw</span> e.rethrowFromSystemServer();</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>可以看出，<code>ServiceConnection</code>对象参数最终为了获取<code>IServiceConnection</code>实例，并传递给<code>AMS</code>，所以<code>AMS</code>代理类中的<code>bindService</code>将<code>IServiceConnection</code>对象保存了下来，以作后用。</p>
+<p>到这里，“偷梁换柱”的工作已经完成了，后面就是如何恢复插件service并启动了，按照activity恢复的逻辑，好像service恢复只有一条路走，就是对<code>ActivityThread</code>中的<code>mH</code>设置回调，在service创建之前替换为插件service。但实际上却不是这样的，这也是文章开始说的不同，原因后面再推。</p>
+<h3 id="Service代理"><a href="#Service代理" class="headerlink" title="Service代理"></a>Service代理</h3><p>既然service和activity不一样，已经没有恢复插件service的地方了，那预注册的service就真正启动了。<code>LocalService</code>和<code>RemoteService</code>是有具体实现的，逻辑主要在<code>LocalService</code>中（前面也说过，是不是有所怀疑）。前面<code>AMS</code>代理中实现的是，无论是拦截的哪个方法，都是调用的<code>Context.startService</code>启动service。service实例只能有一个，每次调用<code>startService</code>不会再创建service，而是执行<code>onStartCommand</code>回调，这也能猜到所有的逻辑都在<code>LocalService.onStartCommand</code>方法中：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Override</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">int</span> <span class="title">onStartCommand</span><span class="params">(Intent intent, <span class="keyword">int</span> flags, <span class="keyword">int</span> startId)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">if</span> (<span class="keyword">null</span> == intent || !intent.hasExtra(EXTRA_TARGET) || !intent.hasExtra(EXTRA_COMMAND)) &#123;</span><br><span class="line">        <span class="keyword">return</span> START_STICKY;</span><br><span class="line">    &#125;</span><br><span class="line">    Intent target = intent.getParcelableExtra(EXTRA_TARGET);</span><br><span class="line">    <span class="keyword">int</span> command = intent.getIntExtra(EXTRA_COMMAND, <span class="number">0</span>);</span><br><span class="line">    <span class="keyword">if</span> (<span class="keyword">null</span> == target || command &lt;= <span class="number">0</span>) &#123;</span><br><span class="line">        <span class="keyword">return</span> START_STICKY;</span><br><span class="line">    &#125;</span><br><span class="line">    ComponentName component = target.getComponent();</span><br><span class="line">    LoadedPlugin plugin = mPluginManager.getLoadedPlugin(component);</span><br><span class="line">    <span class="comment">// ClassNotFoundException when unmarshalling in Android 5.1</span></span><br><span class="line">    target.setExtrasClassLoader(plugin.getClassLoader());</span><br><span class="line">    <span class="keyword">switch</span> (command) &#123;</span><br><span class="line">        <span class="keyword">case</span> EXTRA_COMMAND_START_SERVICE: &#123;<span class="comment">// startService</span></span><br><span class="line">            ActivityThread mainThread = (ActivityThread)ReflectUtil.getActivityThread(getBaseContext());</span><br><span class="line">            IApplicationThread appThread = mainThread.getApplicationThread();</span><br><span class="line">            Service service;</span><br><span class="line">            <span class="keyword">if</span> (<span class="keyword">this</span>.mPluginManager.getComponentsHandler().isServiceAvailable(component)) &#123;<span class="comment">// service是否启动</span></span><br><span class="line">                service = <span class="keyword">this</span>.mPluginManager.getComponentsHandler().getService(component);</span><br><span class="line">            &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">                <span class="keyword">try</span> &#123;</span><br><span class="line">                    service = (Service) plugin.getClassLoader().loadClass(component.getClassName()).newInstance();<span class="comment">// 创建插件service</span></span><br><span class="line">                    Application app = plugin.getApplication();</span><br><span class="line">                    IBinder token = appThread.asBinder();</span><br><span class="line">                    Method attach = service.getClass().getMethod(<span class="string">"attach"</span>, Context.class, ActivityThread.class, String.class, IBinder.class, Application.class, Object.class);</span><br><span class="line">                    IActivityManager am = mPluginManager.getActivityManager();</span><br><span class="line">                    attach.invoke(service, plugin.getPluginContext(), mainThread, component.getClassName(), token, app, am);<span class="comment">// 执行attach</span></span><br><span class="line">                    service.onCreate();<span class="comment">// 执行onCreate</span></span><br><span class="line">                    <span class="keyword">this</span>.mPluginManager.getComponentsHandler().rememberService(component, service);<span class="comment">// 保存</span></span><br><span class="line">                &#125; <span class="keyword">catch</span> (Throwable t) &#123;</span><br><span class="line">                    <span class="keyword">return</span> START_STICKY;</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">            service.onStartCommand(target, <span class="number">0</span>, <span class="keyword">this</span>.mPluginManager.getComponentsHandler().getServiceCounter(service).getAndIncrement());</span><br><span class="line">            <span class="keyword">break</span>;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">case</span> EXTRA_COMMAND_BIND_SERVICE: &#123;<span class="comment">// bindService</span></span><br><span class="line">            ActivityThread mainThread = (ActivityThread)ReflectUtil.getActivityThread(getBaseContext());</span><br><span class="line">            IApplicationThread appThread = mainThread.getApplicationThread();</span><br><span class="line">            Service service = <span class="keyword">null</span>;</span><br><span class="line">            <span class="keyword">if</span> (<span class="keyword">this</span>.mPluginManager.getComponentsHandler().isServiceAvailable(component)) &#123;</span><br><span class="line">                service = <span class="keyword">this</span>.mPluginManager.getComponentsHandler().getService(component);</span><br><span class="line">            &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">                <span class="keyword">try</span> &#123;</span><br><span class="line">                    service = (Service) plugin.getClassLoader().loadClass(component.getClassName()).newInstance();</span><br><span class="line">                    Application app = plugin.getApplication();</span><br><span class="line">                    IBinder token = appThread.asBinder();</span><br><span class="line">                    Method attach = service.getClass().getMethod(<span class="string">"attach"</span>, Context.class, ActivityThread.class, String.class, IBinder.class, Application.class, Object.class);</span><br><span class="line">                    IActivityManager am = mPluginManager.getActivityManager();</span><br><span class="line">                    attach.invoke(service, plugin.getPluginContext(), mainThread, component.getClassName(), token, app, am);</span><br><span class="line">                    service.onCreate();</span><br><span class="line">                    <span class="keyword">this</span>.mPluginManager.getComponentsHandler().rememberService(component, service);</span><br><span class="line">                &#125; <span class="keyword">catch</span> (Throwable t) &#123;</span><br><span class="line">                    t.printStackTrace();</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">            <span class="keyword">try</span> &#123;<span class="comment">// 回调IServiceConnection</span></span><br><span class="line">                IBinder binder = service.onBind(target);</span><br><span class="line">                IBinder serviceConnection = PluginUtil.getBinder(intent.getExtras(), <span class="string">"sc"</span>);</span><br><span class="line">                IServiceConnection iServiceConnection = IServiceConnection.Stub.asInterface(serviceConnection);</span><br><span class="line">                <span class="keyword">if</span> (Build.VERSION.SDK_INT &gt;= <span class="number">26</span>) &#123;</span><br><span class="line">                    ReflectUtil.invokeNoException(IServiceConnection.class, iServiceConnection, <span class="string">"connected"</span>,</span><br><span class="line">                            <span class="keyword">new</span> Class[]&#123;ComponentName.class, IBinder.class, <span class="keyword">boolean</span>.class&#125;,</span><br><span class="line">                            <span class="keyword">new</span> Object[]&#123;component, binder, <span class="keyword">false</span>&#125;);</span><br><span class="line">                &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">                    iServiceConnection.connected(component, binder);</span><br><span class="line">                &#125;</span><br><span class="line">            &#125; <span class="keyword">catch</span> (Exception e) &#123;</span><br><span class="line">                e.printStackTrace();</span><br><span class="line">            &#125;</span><br><span class="line">            <span class="keyword">break</span>;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">case</span> EXTRA_COMMAND_STOP_SERVICE: &#123;<span class="comment">// stopService or stopServiceToken</span></span><br><span class="line">            Service service = <span class="keyword">this</span>.mPluginManager.getComponentsHandler().forgetService(component); <span class="comment">//移除</span></span><br><span class="line">            service.onDestroy();<span class="comment">//执行onDestroy</span></span><br><span class="line">            <span class="keyword">break</span>;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">case</span> EXTRA_COMMAND_UNBIND_SERVICE: &#123;<span class="comment">// unbindService</span></span><br><span class="line">            Service service = <span class="keyword">this</span>.mPluginManager.getComponentsHandler().forgetService(component);<span class="comment">//移除</span></span><br><span class="line">            service.onUnbind(target);<span class="comment">// 执行onUnbind</span></span><br><span class="line">            service.onDestroy();<span class="comment">// 执行onDestroy</span></span><br><span class="line">            <span class="keyword">break</span>;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> START_STICKY;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>在该方法中，根据前面设置的不同命令，执行对应的service创建和销毁。<code>stopService</code>和<code>unbindService</code>对应的命令比较简单，执行对应的生命周期回调即可。插件service的创建相对复杂，主要是三步：</p>
+<ul>
+<li>使用自定义的插件<code>ClassLoader</code>创建service实例；</li>
+<li>执行<code>Service.attach</code>方法，对service运行环境初始化；</li>
+<li>执行<code>onCreate</code>、<code>onStartCommand</code>生命周期回调。</li>
+</ul>
+<p><code>bindService</code>除了上面三步，还要执行<code>ServiceConnection</code>的回调。插件service创建及生命周期处理原理到这里就很清晰了，即通过预注册service作为代理，通过不同的命令参数执行插件service对应的操作。为什么这么做呢？这就是activity和service的不同了，这里我们倒推一下原因。</p>
+<p>还记得activity插件化中，对于activity生命周期的回调，在插件化框架中是没有处理的，完全交由系统去分发回调事件，这样做的原因也很容易想到，就是activity回调不是我们写代码控制的，而是系统根据我们不同的操作，如返回、启动新activity、显示<code>dialog</code>等，来处理activity的生命周期，我们程序无法完全判断activity生命周期回调逻辑，只能被动接受系统的逻辑。而service不同，其生命周期简单，<code>onCreate</code>、<code>onStartCommand</code>、<code>onBind</code>都是程序中启动service时执行，而<code>onDestroy</code>、<code>onUnbind</code>则是执行<code>stopService</code>或者<code>unbindService</code>时执行的，所以是我们程序控制service的生命周期。因此，我们不需要像启动activity那么复杂，service插件化只需要拦截<code>AMS</code>之后直接创建或者销毁就好。</p>
+<p>既然这样做可以，为什么还要使用service代理来处理插件service的创建及生命周期？如果直接在<code>AMS</code>代理类中直接处理，插件service就不能算是<a href="https://developer.android.google.cn/guide/components/services.html?hl=zh-cn" target="_blank" rel="noopener">Service</a>了，<a href="https://developer.android.google.cn/guide/components/services.html?hl=zh-cn" target="_blank" rel="noopener">Service</a>是应用组件，有自己的生命周期及运行时优先级，甚至有自己的进程。所以使用service代理就是一个很好的方法，这就让插件service成为了真正的<a href="https://developer.android.google.cn/guide/components/services.html?hl=zh-cn" target="_blank" rel="noopener">Service</a>。</p>
+<blockquote>
+<p><code>Service</code> 是一个可以在后台执行长时间运行操作而不提供用户界面的应用组件。</p>
+</blockquote>
+<h3 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h3><p>最后总结下插件service处理过程：</p>
+<ol>
+<li>预注册services，用于替换插件service；</li>
+<li>hook <code>AMS</code>，拦截对应的service方法，并替换插件service，启动预注册service；</li>
+<li>通过将预注册service作为代理，实现插件service创建及生命周期回调。</li>
+</ol>
+<p>通过上面的分析，也看到了service和activity的区别，及service代理的巧妙。</p>
+
+      
+    </div>
+    
+    
+    
+
+    
+
+    
+
+    
+
+    <footer class="post-footer">
+      
+        <div class="post-tags">
+          
+            <a href="/tags/Android/" rel="tag"># Android</a>
+          
+            <a href="/tags/源码分析/" rel="tag"># 源码分析</a>
+          
+            <a href="/tags/插件化/" rel="tag"># 插件化</a>
+          
+            <a href="/tags/VirtualAPK/" rel="tag"># VirtualAPK</a>
+          
+        </div>
+      
+
+      
+      
+      
+
+      
+        <div class="post-nav">
+          <div class="post-nav-next post-nav-item">
+            
+              <a href="/post/virtualapk-analysis-2/" rel="next" title="VirtualAPK原理分析之Activity启动">
+                <i class="fa fa-chevron-left"></i> VirtualAPK原理分析之Activity启动
+              </a>
+            
+          </div>
+
+          <span class="post-nav-divider"></span>
+
+          <div class="post-nav-prev post-nav-item">
+            
+              <a href="/post/plugin-appcompat-activity/" rel="prev" title="插件化之启动AppCompatActivity">
+                插件化之启动AppCompatActivity <i class="fa fa-chevron-right"></i>
+              </a>
+            
+          </div>
+        </div>
+      
+
+      
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+
+    <div class="post-spread">
+      
+    </div>
+  </div>
+
+
+          </div>
+          
+
+
+          
+
+  
+
+
+
+        </div>
+        
+          
+  
+  <div class="sidebar-toggle">
+    <div class="sidebar-toggle-line-wrap">
+      <span class="sidebar-toggle-line sidebar-toggle-line-first"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-middle"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-last"></span>
+    </div>
+  </div>
+
+  <aside id="sidebar" class="sidebar">
+    
+    <div class="sidebar-inner">
+
+      
+
+      
+        <ul class="sidebar-nav motion-element">
+          <li class="sidebar-nav-toc sidebar-nav-active" data-target="post-toc-wrap">
+            文章目录
+          </li>
+          <li class="sidebar-nav-overview" data-target="site-overview-wrap">
+            站点概览
+          </li>
+        </ul>
+      
+
+      <section class="site-overview-wrap sidebar-panel">
+        <div class="site-overview">
+          <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+            
+              <p class="site-author-name" itemprop="name">YMlion</p>
+              <p class="site-description motion-element" itemprop="description">业精于勤，荒于嬉；行成于思，毁于随。</p>
+          </div>
+
+          <nav class="site-state motion-element">
+
+            
+              <div class="site-state-item site-state-posts">
+              
+                <a href="/archives/">
+              
+                  <span class="site-state-item-count">10</span>
+                  <span class="site-state-item-name">日志</span>
+                </a>
+              </div>
+            
+
+            
+              
+              
+              <div class="site-state-item site-state-categories">
+                <a href="/categories/index.html">
+                  <span class="site-state-item-count">3</span>
+                  <span class="site-state-item-name">分类</span>
+                </a>
+              </div>
+            
+
+            
+              
+              
+              <div class="site-state-item site-state-tags">
+                <a href="/tags/index.html">
+                  <span class="site-state-item-count">10</span>
+                  <span class="site-state-item-name">标签</span>
+                </a>
+              </div>
+            
+
+          </nav>
+
+          
+            <div class="feed-link motion-element">
+              <a href="/atom.xml" rel="alternate">
+                <i class="fa fa-rss"></i>
+                RSS
+              </a>
+            </div>
+          
+
+          <div class="links-of-author motion-element">
+            
+              
+                <span class="links-of-author-item">
+                  <a href="https://github.com/YMlion" target="_blank" title="GitHub">
+                    
+                      <i class="fa fa-fw fa-github"></i>GitHub</a>
+                </span>
+              
+                <span class="links-of-author-item">
+                  <a href="mailto:lmion.yao@gmail.com" target="_blank" title="E-Mail">
+                    
+                      <i class="fa fa-fw fa-envelope"></i>E-Mail</a>
+                </span>
+              
+            
+          </div>
+
+          
+          
+
+          
+          
+
+          
+
+        </div>
+      </section>
+
+      
+      <!--noindex-->
+        <section class="post-toc-wrap motion-element sidebar-panel sidebar-panel-active">
+          <div class="post-toc">
+
+            
+              
+            
+
+            
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-3"><a class="nav-link" href="#预注册"><span class="nav-number">1.</span> <span class="nav-text">预注册</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#hook-AMS"><span class="nav-number">2.</span> <span class="nav-text">hook AMS</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#Service代理"><span class="nav-number">3.</span> <span class="nav-text">Service代理</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#总结"><span class="nav-number">4.</span> <span class="nav-text">总结</span></a></li></ol></div>
+            
+
+          </div>
+        </section>
+      <!--/noindex-->
+      
+
+      
+
+    </div>
+  </aside>
+
+
+        
+      </div>
+    </main>
+
+    <footer id="footer" class="footer">
+      <div class="footer-inner">
+        <div class="copyright">&copy; 2015 &mdash; <span itemprop="copyrightYear">2018</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">YMlion</span>
+
+  
+</div>
+
+
+  <div class="powered-by">由 <a class="theme-link" target="_blank" href="https://hexo.io">Hexo</a> 强力驱动</div>
+
+
+
+  <span class="post-meta-divider">|</span>
+
+
+
+  <div class="theme-info">主题 &mdash; <a class="theme-link" target="_blank" href="https://github.com/iissnan/hexo-theme-next">NexT.Pisces</a></div>
+
+
+
+
+        
+<div class="busuanzi-count">
+  <script async src="https://dn-lbstatics.qbox.me/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+  
+    <span class="site-uv">
+      <i class="fa fa-user"></i>
+      <span class="busuanzi-value" id="busuanzi_value_site_uv"></span>
+      
+    </span>
+  
+
+  
+    <span class="site-pv">
+      <i class="fa fa-eye"></i>
+      <span class="busuanzi-value" id="busuanzi_value_site_pv"></span>
+      
+    </span>
+  
+</div>
+
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+
+    
+      <div class="back-to-top">
+        <i class="fa fa-arrow-up"></i>
+        
+      </div>
+    
+
+    
+
+  </div>
+
+  
+
+<script type="text/javascript">
+  if (Object.prototype.toString.call(window.Promise) !== '[object Function]') {
+    window.Promise = null;
+  }
+</script>
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+    <script type="text/javascript" src="/lib/jquery/index.js?v=2.1.3"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/fastclick/lib/fastclick.min.js?v=1.0.6"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/jquery_lazyload/jquery.lazyload.js?v=1.9.7"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/fancybox/source/jquery.fancybox.pack.js?v=2.1.5"></script>
+  
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/utils.js?v=5.1.3"></script>
+
+  <script type="text/javascript" src="/js/src/motion.js?v=5.1.3"></script>
+
+
+
+  
+  
+
+
+  <script type="text/javascript" src="/js/src/affix.js?v=5.1.3"></script>
+
+  <script type="text/javascript" src="/js/src/schemes/pisces.js?v=5.1.3"></script>
+
+
+
+  
+  <script type="text/javascript" src="/js/src/scrollspy.js?v=5.1.3"></script>
+<script type="text/javascript" src="/js/src/post-details.js?v=5.1.3"></script>
+
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/bootstrap.js?v=5.1.3"></script>
+
+
+
+  
+
+
+  
+
+
+
+
+	
+
+
+
+
+
+  
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+
+  
+
+  
+
+  
+
+  
+  
+
+  
+
+  
+
+  
+
+</body>
+</html>

@@ -1,0 +1,858 @@
+<!DOCTYPE html>
+
+
+
+  
+
+
+<html class="theme-next pisces use-motion" lang="zh-Hans">
+<head>
+  <meta charset="UTF-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
+<meta name="theme-color" content="#222">
+
+
+
+
+
+
+
+
+
+<meta http-equiv="Cache-Control" content="no-transform" />
+<meta http-equiv="Cache-Control" content="no-siteapp" />
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+  <link href="/lib/fancybox/source/jquery.fancybox.css?v=2.1.5" rel="stylesheet" type="text/css" />
+
+
+
+
+
+
+
+<link href="/lib/font-awesome/css/font-awesome.min.css?v=4.6.2" rel="stylesheet" type="text/css" />
+
+<link href="/css/main.css?v=5.1.3" rel="stylesheet" type="text/css" />
+
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=5.1.3">
+
+
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=5.1.3">
+
+
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=5.1.3">
+
+
+  <link rel="mask-icon" href="/images/logo.svg?v=5.1.3" color="#222">
+
+
+
+
+
+  <meta name="keywords" content="Android,源码分析,插件化,VirtualAPK," />
+
+
+
+
+
+  <link rel="alternate" href="/atom.xml" title="YMlion's Blog" type="application/atom+xml" />
+
+
+
+
+
+
+<meta name="description" content="使用VirtualAPK加载插件时，在应用启动时要去初始化，并在该加载插件的时候去加载插件，这两步大部分情况下并不是一起执行的，因为第一步正常情况下在Application.onCreate中就执行了，下面简单看下在这两步中都做了什么。">
+<meta name="keywords" content="Android,源码分析,插件化,VirtualAPK">
+<meta property="og:type" content="article">
+<meta property="og:title" content="VirtualAPK加载分析">
+<meta property="og:url" content="https://ymlion.com/post/virtualapk-analysis-1/index.html">
+<meta property="og:site_name" content="YMlion&#39;s Blog">
+<meta property="og:description" content="使用VirtualAPK加载插件时，在应用启动时要去初始化，并在该加载插件的时候去加载插件，这两步大部分情况下并不是一起执行的，因为第一步正常情况下在Application.onCreate中就执行了，下面简单看下在这两步中都做了什么。">
+<meta property="og:locale" content="zh-Hans">
+<meta property="og:updated_time" content="2018-04-08T03:49:50.088Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="VirtualAPK加载分析">
+<meta name="twitter:description" content="使用VirtualAPK加载插件时，在应用启动时要去初始化，并在该加载插件的时候去加载插件，这两步大部分情况下并不是一起执行的，因为第一步正常情况下在Application.onCreate中就执行了，下面简单看下在这两步中都做了什么。">
+
+
+
+<script type="text/javascript" id="hexo.configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Pisces',
+    version: '5.1.3',
+    sidebar: {"position":"left","display":"post","offset":12,"b2t":false,"scrollpercent":false,"onmobile":false},
+    fancybox: true,
+    tabs: true,
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    duoshuo: {
+      userId: '0',
+      author: '博主'
+    },
+    algolia: {
+      applicationID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    }
+  };
+</script>
+
+
+
+  <link rel="canonical" href="https://ymlion.com/post/virtualapk-analysis-1/"/>
+
+
+
+
+
+  <title>VirtualAPK加载分析 | YMlion's Blog</title>
+  
+
+
+
+
+
+  <script type="text/javascript">
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?93ccb82075a783cf82b4e98bec7097e3";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" lang="zh-Hans">
+
+  
+  
+    
+  
+
+  <div class="container sidebar-position-left page-post-detail">
+    <div class="headband"></div>
+
+    <header id="header" class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-wrapper">
+  <div class="site-meta ">
+    
+
+    <div class="custom-logo-site-title">
+      <a href="/"  class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">YMlion's Blog</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+      
+        <p class="site-subtitle">写点什么</p>
+      
+  </div>
+
+  <div class="site-nav-toggle">
+    <button>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+    </button>
+  </div>
+</div>
+
+<nav class="site-nav">
+  
+
+  
+    <ul id="menu" class="menu">
+      
+        
+        <li class="menu-item menu-item-home">
+          <a href="/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-home"></i> <br />
+            
+            首页
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-tags">
+          <a href="/tags/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-tags"></i> <br />
+            
+            标签
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-categories">
+          <a href="/categories/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-th"></i> <br />
+            
+            分类
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-archives">
+          <a href="/archives/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-archive"></i> <br />
+            
+            归档
+          </a>
+        </li>
+      
+
+      
+    </ul>
+  
+
+  
+</nav>
+
+
+
+ </div>
+    </header>
+
+    <main id="main" class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          <div id="content" class="content">
+            
+
+  <div id="posts" class="posts-expand">
+    
+
+  
+
+  
+  
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="https://ymlion.com/post/virtualapk-analysis-1/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="YMlion">
+      <meta itemprop="description" content="">
+      <meta itemprop="image" content="/images/avatar.gif">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="YMlion's Blog">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">VirtualAPK加载分析</h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">发表于</span>
+              
+              <time title="创建于" itemprop="dateCreated datePublished" datetime="2018-03-06T17:04:01+08:00">
+                2018-03-06
+              </time>
+            
+
+            
+
+            
+          </span>
+
+          
+            <span class="post-category" >
+            
+              <span class="post-meta-divider">|</span>
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">分类于</span>
+              
+              
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Android/" itemprop="url" rel="index">
+                    <span itemprop="name">Android</span>
+                  </a>
+                </span>
+
+                
+                
+                  ， 
+                
+              
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Android/插件化/" itemprop="url" rel="index">
+                    <span itemprop="name">插件化</span>
+                  </a>
+                </span>
+
+                
+                
+              
+            </span>
+          
+
+          
+            
+          
+
+          
+          
+
+          
+            <span class="post-meta-divider">|</span>
+            <span class="page-pv"><i class="fa fa-file-o"></i>
+            <span class="busuanzi-value" id="busuanzi_value_page_pv" ></span>
+            </span>
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        <p>使用<a href="https://github.com/didi/VirtualAPK" target="_blank" rel="noopener">VirtualAPK</a>加载插件时，在应用启动时要去初始化，并在该加载插件的时候去加载插件，这两步大部分情况下并不是一起执行的，因为第一步正常情况下在<code>Application.onCreate</code>中就执行了，下面简单看下在这两步中都做了什么。</p>
+<a id="more"></a>
+<h3 id="PluginManager初始化"><a href="#PluginManager初始化" class="headerlink" title="PluginManager初始化"></a><code>PluginManager</code>初始化</h3><ol>
+<li>创建<code>PluginManager</code>，将<code>application context</code>保存到<code>mContext</code>；</li>
+<li>hook掉<code>ActivityThread</code>中的<code>Instrumention</code>和<code>Handler</code>对象<code>mInstrumentation</code>和<code>mH</code>的<code>Callback</code>；</li>
+<li>hook掉<code>AMS</code>， <code>API26</code>和其以下源码不同，分别hook，使用动态代理以<code>ActivityManagerProxy</code>来拦截<code>AMS</code>中的某些方法，大部分是和<code>Service</code>相关的；</li>
+<li>执行<code>init</code>方法，该方法暂时只创建<code>mComponentsHandler</code>对象，第二步执行的后台方法为空方法。</li>
+</ol>
+<h3 id="加载插件"><a href="#加载插件" class="headerlink" title="加载插件"></a>加载插件</h3><p>这是加载插件的过程，通过<code>PluginManager.loadPlugin</code>来执行这个过程，代码很简单，其中最主要的就是解析插件文件构造<code>LoadedPlugin</code>实例。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">loadPlugin</span><span class="params">(File apk)</span> <span class="keyword">throws</span> Exception </span>&#123;</span><br><span class="line">    LoadedPlugin plugin = LoadedPlugin.create(<span class="keyword">this</span>, <span class="keyword">this</span>.mContext, apk);<span class="comment">// 1</span></span><br><span class="line">    <span class="keyword">if</span> (<span class="keyword">null</span> != plugin) &#123;</span><br><span class="line">        <span class="keyword">this</span>.mPlugins.put(plugin.getPackageName(), plugin);<span class="comment">// 2</span></span><br><span class="line">        plugin.invokeApplication();<span class="comment">// 3</span></span><br><span class="line">     &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        <span class="keyword">throw</span>  <span class="keyword">new</span> RuntimeException(<span class="string">"Can't load plugin which is invalid: "</span> + apk.getAbsolutePath());</span><br><span class="line">     &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h4 id="创建LoadedPlugin实例"><a href="#创建LoadedPlugin实例" class="headerlink" title="创建LoadedPlugin实例"></a>创建<code>LoadedPlugin</code>实例</h4><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br></pre></td><td class="code"><pre><span class="line">LoadedPlugin(PluginManager pluginManager, Context context, File apk) <span class="keyword">throws</span> PackageParser.PackageParserException &#123;</span><br><span class="line">    <span class="keyword">this</span>.mPluginManager = pluginManager;</span><br><span class="line">    <span class="keyword">this</span>.mHostContext = context;</span><br><span class="line">    <span class="keyword">this</span>.mLocation = apk.getAbsolutePath();</span><br><span class="line">    <span class="keyword">this</span>.mPackage = PackageParserCompat.parsePackage(context, apk, PackageParser.PARSE_MUST_BE_APK);</span><br><span class="line">    <span class="keyword">this</span>.mPackage.applicationInfo.metaData = <span class="keyword">this</span>.mPackage.mAppMetaData;</span><br><span class="line">    <span class="keyword">this</span>.mPackageInfo = <span class="keyword">new</span> PackageInfo();</span><br><span class="line">    <span class="keyword">this</span>.mPackageInfo.applicationInfo = <span class="keyword">this</span>.mPackage.applicationInfo;</span><br><span class="line">    <span class="keyword">this</span>.mPackageInfo.applicationInfo.sourceDir = apk.getAbsolutePath();</span><br><span class="line">    <span class="keyword">this</span>.mPackageInfo.signatures = <span class="keyword">this</span>.mPackage.mSignatures;</span><br><span class="line">    <span class="keyword">this</span>.mPackageInfo.packageName = <span class="keyword">this</span>.mPackage.packageName;</span><br><span class="line">    <span class="keyword">if</span> (pluginManager.getLoadedPlugin(mPackageInfo.packageName) != <span class="keyword">null</span>) &#123;</span><br><span class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> RuntimeException(<span class="string">"plugin has already been loaded : "</span> + mPackageInfo.packageName);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">this</span>.mPackageInfo.versionCode = <span class="keyword">this</span>.mPackage.mVersionCode;</span><br><span class="line">    <span class="keyword">this</span>.mPackageInfo.versionName = <span class="keyword">this</span>.mPackage.mVersionName;</span><br><span class="line">    <span class="keyword">this</span>.mPackageInfo.permissions = <span class="keyword">new</span> PermissionInfo[<span class="number">0</span>];</span><br><span class="line">    <span class="keyword">this</span>.mPackageManager = <span class="keyword">new</span> PluginPackageManager();</span><br><span class="line">    <span class="keyword">this</span>.mPluginContext = <span class="keyword">new</span> PluginContext(<span class="keyword">this</span>);</span><br><span class="line">    <span class="keyword">this</span>.mNativeLibDir = context.getDir(Constants.NATIVE_DIR, Context.MODE_PRIVATE);</span><br><span class="line">    <span class="keyword">this</span>.mResources = createResources(context, apk);</span><br><span class="line">    <span class="keyword">this</span>.mClassLoader = createClassLoader(context, apk, <span class="keyword">this</span>.mNativeLibDir, context.getClassLoader());</span><br><span class="line">    tryToCopyNativeLib(apk);</span><br><span class="line">    <span class="comment">// Cache instrumentations</span></span><br><span class="line">    Map&lt;ComponentName, InstrumentationInfo&gt; instrumentations = <span class="keyword">new</span> HashMap&lt;ComponentName, InstrumentationInfo&gt;();</span><br><span class="line">    <span class="keyword">for</span> (PackageParser.Instrumentation instrumentation : <span class="keyword">this</span>.mPackage.instrumentation) &#123;</span><br><span class="line">        instrumentations.put(instrumentation.getComponentName(), instrumentation.info);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">this</span>.mInstrumentationInfos = Collections.unmodifiableMap(instrumentations);</span><br><span class="line">    <span class="keyword">this</span>.mPackageInfo.instrumentation = instrumentations.values().toArray(<span class="keyword">new</span> InstrumentationInfo[instrumentations.size()]);</span><br><span class="line">    <span class="comment">// Cache activities</span></span><br><span class="line">    Map&lt;ComponentName, ActivityInfo&gt; activityInfos = <span class="keyword">new</span> HashMap&lt;ComponentName, ActivityInfo&gt;();</span><br><span class="line">    <span class="keyword">for</span> (PackageParser.Activity activity : <span class="keyword">this</span>.mPackage.activities) &#123;</span><br><span class="line">        activityInfos.put(activity.getComponentName(), activity.info);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">this</span>.mActivityInfos = Collections.unmodifiableMap(activityInfos);</span><br><span class="line">    <span class="keyword">this</span>.mPackageInfo.activities = activityInfos.values().toArray(<span class="keyword">new</span> ActivityInfo[activityInfos.size()]);</span><br><span class="line">    <span class="comment">// Cache services</span></span><br><span class="line">    Map&lt;ComponentName, ServiceInfo&gt; serviceInfos = <span class="keyword">new</span> HashMap&lt;ComponentName, ServiceInfo&gt;();</span><br><span class="line">    <span class="keyword">for</span> (PackageParser.Service service : <span class="keyword">this</span>.mPackage.services) &#123;</span><br><span class="line">        serviceInfos.put(service.getComponentName(), service.info);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">this</span>.mServiceInfos = Collections.unmodifiableMap(serviceInfos);</span><br><span class="line">    <span class="keyword">this</span>.mPackageInfo.services = serviceInfos.values().toArray(<span class="keyword">new</span> ServiceInfo[serviceInfos.size()])</span><br><span class="line">    <span class="comment">// Cache providers</span></span><br><span class="line">    Map&lt;String, ProviderInfo&gt; providers = <span class="keyword">new</span> HashMap&lt;String, ProviderInfo&gt;();</span><br><span class="line">    Map&lt;ComponentName, ProviderInfo&gt; providerInfos = <span class="keyword">new</span> HashMap&lt;ComponentName, ProviderInfo&gt;();</span><br><span class="line">    <span class="keyword">for</span> (PackageParser.Provider provider : <span class="keyword">this</span>.mPackage.providers) &#123;</span><br><span class="line">        providers.put(provider.info.authority, provider.info);</span><br><span class="line">        providerInfos.put(provider.getComponentName(), provider.info);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">this</span>.mProviders = Collections.unmodifiableMap(providers);</span><br><span class="line">    <span class="keyword">this</span>.mProviderInfos = Collections.unmodifiableMap(providerInfos);</span><br><span class="line">    <span class="keyword">this</span>.mPackageInfo.providers = providerInfos.values().toArray(<span class="keyword">new</span> ProviderInfo[providerInfos.size()]);</span><br><span class="line">    <span class="comment">// Register broadcast receivers dynamically</span></span><br><span class="line">    Map&lt;ComponentName, ActivityInfo&gt; receivers = <span class="keyword">new</span> HashMap&lt;ComponentName, ActivityInfo&gt;();</span><br><span class="line">    <span class="keyword">for</span> (PackageParser.Activity receiver : <span class="keyword">this</span>.mPackage.receivers) &#123;</span><br><span class="line">        receivers.put(receiver.getComponentName(), receiver.info);</span><br><span class="line">        <span class="keyword">try</span> &#123;</span><br><span class="line">            BroadcastReceiver br = BroadcastReceiver.class.cast(getClassLoader().loadClass(receiver.getComponentName().getClassName()).newInstance());</span><br><span class="line">            <span class="keyword">for</span> (PackageParser.ActivityIntentInfo aii : receiver.intents) &#123;</span><br><span class="line">                <span class="keyword">this</span>.mHostContext.registerReceiver(br, aii);</span><br><span class="line">            &#125;</span><br><span class="line">        &#125; <span class="keyword">catch</span> (Exception e) &#123;</span><br><span class="line">            e.printStackTrace();</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">this</span>.mReceiverInfos = Collections.unmodifiableMap(receivers);</span><br><span class="line">    <span class="keyword">this</span>.mPackageInfo.receivers = receivers.values().toArray(<span class="keyword">new</span> ActivityInfo[receivers.size()]);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>这部分代码比较长，要做的事情也比较多，一步一步来分析。</p>
+<ol>
+<li><p>保存传过来的几个参数到成员变量，尤其是<code>pluginManager</code>和<code>context</code>，后面用到的比较频繁；</p>
+</li>
+<li><p>通过<code>PackageParserCompat.parsePackage</code>来解析插件apk，由于版本变化比较大，因此分为24、21及21以下三个来分别解析。解析方法使用SDK中隐藏类<code>android.content.pm.PackageParse</code>中的<code>parsePackage</code>方法，最终该方法返回<code>PackageParse.Package</code>类实例，该类包含了解析的apk文件的所有信息即<code>AndroidManifest.xml</code>中包含的信息及其他信息。这一步至关重要，是所有后面操作的基础。</p>
+</li>
+<li><p>根据解析之后得到的<code>mPackage</code>，创建了<code>PackageInfo</code>实例<code>mPackageInfo</code>；并赋值之后的几个成员变量；</p>
+</li>
+<li><p>获取插件的<code>Resources</code>对象，这里根据是否合并宿主和插件的资源分成两种不同的获取方法：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">static</span> Resources <span class="title">createResources</span><span class="params">(Context context, File apk)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">if</span> (Constants.COMBINE_RESOURCES) &#123; <span class="comment">// 合并资源，该值为true</span></span><br><span class="line">        Resources resources = ResourcesManager.createResources(context, apk.getAbsolutePath());</span><br><span class="line">        ResourcesManager.hookResources(context, resources);</span><br><span class="line">        <span class="keyword">return</span> resources;</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123; <span class="comment">// 不合并，生成新的Resources</span></span><br><span class="line">        Resources hostResources = context.getResources();</span><br><span class="line">        AssetManager assetManager = createAssetManager(context, apk);</span><br><span class="line">        <span class="keyword">return</span> <span class="keyword">new</span> Resources(assetManager, hostResources.getDisplayMetrics(), hostResources.getConfiguration());</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>先说不合并，这个比较简单，创建<code>AssetManager</code>对象，通过反射<code>AssetManager.addAssetPath</code>将插件资源添加到<code>AssetManager</code>对象中，最后<code>new</code>一个<code>Resources</code>对象即可，该对象即可方法插件资源。</p>
+<p>如果要合并资源，就是获取到宿主的<code>AssetManager</code>实例，并通过<code>addAssetPath</code>把每个插件添加到该实例中，再<code>new</code>一个新的<code>Resources</code>对象，并更新每个插件的<code>Resources</code>对象，看下具体代码：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">synchronized</span> Resources <span class="title">createResources</span><span class="params">(Context hostContext, String apk)</span> </span>&#123;</span><br><span class="line">    Resources hostResources = hostContext.getResources();</span><br><span class="line">    Resources newResources = <span class="keyword">null</span>;</span><br><span class="line">    AssetManager assetManager;</span><br><span class="line">    <span class="keyword">try</span> &#123;</span><br><span class="line">        <span class="keyword">if</span> (Build.VERSION.SDK_INT &lt; Build.VERSION_CODES.LOLLIPOP) &#123;<span class="comment">// 添加宿主资源</span></span><br><span class="line">            assetManager = AssetManager.class.newInstance();</span><br><span class="line">            ReflectUtil.invoke(AssetManager.class, assetManager, <span class="string">"addAssetPath"</span>, hostContext.getApplicationInfo().sourceDir);</span><br><span class="line">        &#125; <span class="keyword">else</span> &#123; <span class="comment">// 直接获取宿主的AssetManager对象</span></span><br><span class="line">            assetManager = hostResources.getAssets();</span><br><span class="line">        &#125;</span><br><span class="line">        ReflectUtil.invoke(AssetManager.class, assetManager, <span class="string">"addAssetPath"</span>, apk);</span><br><span class="line">        List&lt;LoadedPlugin&gt; pluginList = PluginManager.getInstance(hostContext).getAllLoadedPlugins();</span><br><span class="line">        <span class="keyword">for</span> (LoadedPlugin plugin : pluginList) &#123; <span class="comment">// 添加每个插件的资源</span></span><br><span class="line">            ReflectUtil.invoke(AssetManager.class, assetManager, <span class="string">"addAssetPath"</span>, plugin.getLocation());</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="comment">// 由于厂商乱改问题，分别对不同厂商机型进行处理</span></span><br><span class="line">        <span class="keyword">if</span> (isMiUi(hostResources)) &#123;</span><br><span class="line">            newResources = MiUiResourcesCompat.createResources(hostResources, assetManager);</span><br><span class="line">        &#125; <span class="keyword">else</span> <span class="keyword">if</span> (isVivo(hostResources)) &#123;</span><br><span class="line">            newResources = VivoResourcesCompat.createResources(hostContext, hostResources, assetManager);</span><br><span class="line">        &#125; <span class="keyword">else</span> <span class="keyword">if</span> (isNubia(hostResources)) &#123;</span><br><span class="line">            newResources = NubiaResourcesCompat.createResources(hostResources, assetManager);</span><br><span class="line">        &#125; <span class="keyword">else</span> <span class="keyword">if</span> (isNotRawResources(hostResources)) &#123;</span><br><span class="line">            newResources = AdaptationResourcesCompat.createResources(hostResources, assetManager);</span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">            <span class="comment">// is raw android resources</span></span><br><span class="line">            newResources = <span class="keyword">new</span> Resources(assetManager, hostResources.getDisplayMetrics(), hostResources.getConfiguration());</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="comment">// lastly, sync all LoadedPlugin to newResources</span></span><br><span class="line">        <span class="keyword">for</span> (LoadedPlugin plugin : pluginList) &#123;</span><br><span class="line">            plugin.updateResources(newResources);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125; <span class="keyword">catch</span> (Exception e) &#123;</span><br><span class="line">        e.printStackTrace();</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> newResources;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>通过<code>DexClassLoader</code>来加载外部存储中的插件：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">static</span> ClassLoader <span class="title">createClassLoader</span><span class="params">(Context context, File apk, File libsDir, ClassLoader parent)</span> </span>&#123;</span><br><span class="line">    File dexOutputDir = context.getDir(Constants.OPTIMIZE_DIR, Context.MODE_PRIVATE);</span><br><span class="line">    String dexOutputPath = dexOutputDir.getAbsolutePath();</span><br><span class="line">    DexClassLoader loader = <span class="keyword">new</span> DexClassLoader(apk.getAbsolutePath(), dexOutputPath, libsDir.getAbsolutePath(), parent);</span><br><span class="line">    <span class="keyword">if</span> (Constants.COMBINE_CLASSLOADER) &#123;</span><br><span class="line">        <span class="keyword">try</span> &#123;</span><br><span class="line">            DexUtil.insertDex(loader);</span><br><span class="line">        &#125; <span class="keyword">catch</span> (Exception e) &#123;</span><br><span class="line">            e.printStackTrace();</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> loader;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>该方法前三行就是标准的加载apk的代码，难点是后面的dex合并，下面是合并的代码：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">insertDex</span><span class="params">(DexClassLoader dexClassLoader)</span> <span class="keyword">throws</span> Exception </span>&#123;</span><br><span class="line">    <span class="comment">// 获取当前类的PathClassLoader中的pathList变量中的dexElements数组</span></span><br><span class="line">    Object baseDexElements = getDexElements(getPathList(getPathClassLoader()));</span><br><span class="line">    <span class="comment">// 获取dexClassLoader中的pathList变量中的dexElements数组</span></span><br><span class="line">    Object newDexElements = getDexElements(getPathList(dexClassLoader));</span><br><span class="line">    <span class="comment">// 合并两个dexElements，创建一个新的Array对象，保存两者</span></span><br><span class="line">    Object allDexElements = combineArray(baseDexElements, newDexElements);</span><br><span class="line">    Object pathList = getPathList(getPathClassLoader());</span><br><span class="line">    <span class="comment">// 把合并之后的dexElements替换原来PathClassLoader中的pathList变量中的dexElements数组</span></span><br><span class="line">    ReflectUtil.setField(pathList.getClass(), pathList, <span class="string">"dexElements"</span>, allDexElements);</span><br><span class="line">    <span class="comment">// 把native lib文件合并之后替换原来PathClassLoader中的pathList变量中的nativeLibraryDirectories数组</span></span><br><span class="line">    insertNativeLibrary(dexClassLoader);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>Android应用中默认加载类的是<code>PathClassLoader</code>，<code>DexClassLoader</code>是加载自定义的jar、dex、apk、zip中的类的，两者都继承自<code>BaseDexClassLoader</code>。将插件dex的路径合并到原始的<code>PathClassLoader</code>对象中，后面加载插件的类，就可以用该对象加载了。</p>
+</li>
+<li><p>使用<code>ZipFile</code>解压apk文件，将其中的<code>.so</code>库复制到<code>mNativeLibDir</code>中；</p>
+</li>
+<li><p>通过<code>mPackage</code>获取所有测试类信息<code>InstrumentationInfo</code>、activity信息<code>ActivityInfo</code>、服务信息<code>ServiceInfo</code>、provider信息<code>ProviderInfo</code>；</p>
+</li>
+<li><p>获取所有的静态广播信息，并动态重新注册。</p>
+</li>
+</ol>
+<p>创建完成<code>LoadedPlugin</code>实例之后，将该对象保存到哈希表中，最后一步是创建<code>LoadedPlugin</code>实例的成员变量<code>mApplication</code>：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">private</span> Application <span class="title">makeApplication</span><span class="params">(<span class="keyword">boolean</span> forceDefaultAppClass, Instrumentation instrumentation)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">if</span> (<span class="keyword">null</span> != <span class="keyword">this</span>.mApplication) &#123;</span><br><span class="line">        <span class="keyword">return</span> <span class="keyword">this</span>.mApplication;</span><br><span class="line">    &#125;</span><br><span class="line">    String appClass = <span class="keyword">this</span>.mPackage.applicationInfo.className;</span><br><span class="line">    <span class="keyword">if</span> (forceDefaultAppClass || <span class="keyword">null</span> == appClass) &#123;</span><br><span class="line">        appClass = <span class="string">"android.app.Application"</span>;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">try</span> &#123;</span><br><span class="line">        <span class="keyword">this</span>.mApplication = instrumentation.newApplication(<span class="keyword">this</span>.mClassLoader, appClass, <span class="keyword">this</span>.getPluginContext());</span><br><span class="line">        instrumentation.callApplicationOnCreate(<span class="keyword">this</span>.mApplication);</span><br><span class="line">        <span class="keyword">return</span> <span class="keyword">this</span>.mApplication;</span><br><span class="line">    &#125; <span class="keyword">catch</span> (Exception e) &#123;</span><br><span class="line">        e.printStackTrace();</span><br><span class="line">        <span class="keyword">return</span> <span class="keyword">null</span>;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>比较简单，就是直接调用<code>Instrumentation.newApplication</code>去创建<code>Application</code>实例，并执行其<code>onCreate</code>方法。</p>
+<h3 id="小结"><a href="#小结" class="headerlink" title="小结"></a>小结</h3><ol>
+<li><code>PluginManager</code>的初始化主要工作是hook掉<code>ActivityThread</code>中的<code>Instrumention</code>、<code>AMS</code>和<code>PMS</code>，为后面四大组件能正常运行提供基础；</li>
+<li>加载插件主要是构造<code>LoadedPlugin</code>对象，解析apk文件，获取apk的全部信息，并保存四大组件信息、加载dex、合并资源等。</li>
+</ol>
+<p>这篇主要是分析加载插件中做了什么，至于每一步的具体作用以及加载实现，就放在下一篇去分析。</p>
+<blockquote>
+<p>本篇文章基于<a href="https://github.com/didi/VirtualAPK" target="_blank" rel="noopener">VirtualAPK</a> 0.9.3版本</p>
+</blockquote>
+
+      
+    </div>
+    
+    
+    
+
+    
+
+    
+
+    
+
+    <footer class="post-footer">
+      
+        <div class="post-tags">
+          
+            <a href="/tags/Android/" rel="tag"># Android</a>
+          
+            <a href="/tags/源码分析/" rel="tag"># 源码分析</a>
+          
+            <a href="/tags/插件化/" rel="tag"># 插件化</a>
+          
+            <a href="/tags/VirtualAPK/" rel="tag"># VirtualAPK</a>
+          
+        </div>
+      
+
+      
+      
+      
+
+      
+        <div class="post-nav">
+          <div class="post-nav-next post-nav-item">
+            
+              <a href="/post/systemserver/" rel="next" title="SystemServer分析">
+                <i class="fa fa-chevron-left"></i> SystemServer分析
+              </a>
+            
+          </div>
+
+          <span class="post-nav-divider"></span>
+
+          <div class="post-nav-prev post-nav-item">
+            
+              <a href="/post/android-classloader/" rel="prev" title="Android ClassLoader分析">
+                Android ClassLoader分析 <i class="fa fa-chevron-right"></i>
+              </a>
+            
+          </div>
+        </div>
+      
+
+      
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+
+    <div class="post-spread">
+      
+    </div>
+  </div>
+
+
+          </div>
+          
+
+
+          
+
+  
+
+
+
+        </div>
+        
+          
+  
+  <div class="sidebar-toggle">
+    <div class="sidebar-toggle-line-wrap">
+      <span class="sidebar-toggle-line sidebar-toggle-line-first"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-middle"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-last"></span>
+    </div>
+  </div>
+
+  <aside id="sidebar" class="sidebar">
+    
+    <div class="sidebar-inner">
+
+      
+
+      
+        <ul class="sidebar-nav motion-element">
+          <li class="sidebar-nav-toc sidebar-nav-active" data-target="post-toc-wrap">
+            文章目录
+          </li>
+          <li class="sidebar-nav-overview" data-target="site-overview-wrap">
+            站点概览
+          </li>
+        </ul>
+      
+
+      <section class="site-overview-wrap sidebar-panel">
+        <div class="site-overview">
+          <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+            
+              <p class="site-author-name" itemprop="name">YMlion</p>
+              <p class="site-description motion-element" itemprop="description">业精于勤，荒于嬉；行成于思，毁于随。</p>
+          </div>
+
+          <nav class="site-state motion-element">
+
+            
+              <div class="site-state-item site-state-posts">
+              
+                <a href="/archives/">
+              
+                  <span class="site-state-item-count">10</span>
+                  <span class="site-state-item-name">日志</span>
+                </a>
+              </div>
+            
+
+            
+              
+              
+              <div class="site-state-item site-state-categories">
+                <a href="/categories/index.html">
+                  <span class="site-state-item-count">3</span>
+                  <span class="site-state-item-name">分类</span>
+                </a>
+              </div>
+            
+
+            
+              
+              
+              <div class="site-state-item site-state-tags">
+                <a href="/tags/index.html">
+                  <span class="site-state-item-count">10</span>
+                  <span class="site-state-item-name">标签</span>
+                </a>
+              </div>
+            
+
+          </nav>
+
+          
+            <div class="feed-link motion-element">
+              <a href="/atom.xml" rel="alternate">
+                <i class="fa fa-rss"></i>
+                RSS
+              </a>
+            </div>
+          
+
+          <div class="links-of-author motion-element">
+            
+              
+                <span class="links-of-author-item">
+                  <a href="https://github.com/YMlion" target="_blank" title="GitHub">
+                    
+                      <i class="fa fa-fw fa-github"></i>GitHub</a>
+                </span>
+              
+                <span class="links-of-author-item">
+                  <a href="mailto:lmion.yao@gmail.com" target="_blank" title="E-Mail">
+                    
+                      <i class="fa fa-fw fa-envelope"></i>E-Mail</a>
+                </span>
+              
+            
+          </div>
+
+          
+          
+
+          
+          
+
+          
+
+        </div>
+      </section>
+
+      
+      <!--noindex-->
+        <section class="post-toc-wrap motion-element sidebar-panel sidebar-panel-active">
+          <div class="post-toc">
+
+            
+              
+            
+
+            
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-3"><a class="nav-link" href="#PluginManager初始化"><span class="nav-number">1.</span> <span class="nav-text">PluginManager初始化</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#加载插件"><span class="nav-number">2.</span> <span class="nav-text">加载插件</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#创建LoadedPlugin实例"><span class="nav-number">2.1.</span> <span class="nav-text">创建LoadedPlugin实例</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#小结"><span class="nav-number">3.</span> <span class="nav-text">小结</span></a></li></ol></div>
+            
+
+          </div>
+        </section>
+      <!--/noindex-->
+      
+
+      
+
+    </div>
+  </aside>
+
+
+        
+      </div>
+    </main>
+
+    <footer id="footer" class="footer">
+      <div class="footer-inner">
+        <div class="copyright">&copy; 2015 &mdash; <span itemprop="copyrightYear">2018</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">YMlion</span>
+
+  
+</div>
+
+
+  <div class="powered-by">由 <a class="theme-link" target="_blank" href="https://hexo.io">Hexo</a> 强力驱动</div>
+
+
+
+  <span class="post-meta-divider">|</span>
+
+
+
+  <div class="theme-info">主题 &mdash; <a class="theme-link" target="_blank" href="https://github.com/iissnan/hexo-theme-next">NexT.Pisces</a></div>
+
+
+
+
+        
+<div class="busuanzi-count">
+  <script async src="https://dn-lbstatics.qbox.me/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+  
+    <span class="site-uv">
+      <i class="fa fa-user"></i>
+      <span class="busuanzi-value" id="busuanzi_value_site_uv"></span>
+      
+    </span>
+  
+
+  
+    <span class="site-pv">
+      <i class="fa fa-eye"></i>
+      <span class="busuanzi-value" id="busuanzi_value_site_pv"></span>
+      
+    </span>
+  
+</div>
+
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+
+    
+      <div class="back-to-top">
+        <i class="fa fa-arrow-up"></i>
+        
+      </div>
+    
+
+    
+
+  </div>
+
+  
+
+<script type="text/javascript">
+  if (Object.prototype.toString.call(window.Promise) !== '[object Function]') {
+    window.Promise = null;
+  }
+</script>
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+    <script type="text/javascript" src="/lib/jquery/index.js?v=2.1.3"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/fastclick/lib/fastclick.min.js?v=1.0.6"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/jquery_lazyload/jquery.lazyload.js?v=1.9.7"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/fancybox/source/jquery.fancybox.pack.js?v=2.1.5"></script>
+  
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/utils.js?v=5.1.3"></script>
+
+  <script type="text/javascript" src="/js/src/motion.js?v=5.1.3"></script>
+
+
+
+  
+  
+
+
+  <script type="text/javascript" src="/js/src/affix.js?v=5.1.3"></script>
+
+  <script type="text/javascript" src="/js/src/schemes/pisces.js?v=5.1.3"></script>
+
+
+
+  
+  <script type="text/javascript" src="/js/src/scrollspy.js?v=5.1.3"></script>
+<script type="text/javascript" src="/js/src/post-details.js?v=5.1.3"></script>
+
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/bootstrap.js?v=5.1.3"></script>
+
+
+
+  
+
+
+  
+
+
+
+
+	
+
+
+
+
+
+  
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+
+  
+
+  
+
+  
+
+  
+  
+
+  
+
+  
+
+  
+
+</body>
+</html>

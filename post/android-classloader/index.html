@@ -1,0 +1,862 @@
+<!DOCTYPE html>
+
+
+
+  
+
+
+<html class="theme-next pisces use-motion" lang="zh-Hans">
+<head>
+  <meta charset="UTF-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
+<meta name="theme-color" content="#222">
+
+
+
+
+
+
+
+
+
+<meta http-equiv="Cache-Control" content="no-transform" />
+<meta http-equiv="Cache-Control" content="no-siteapp" />
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+  <link href="/lib/fancybox/source/jquery.fancybox.css?v=2.1.5" rel="stylesheet" type="text/css" />
+
+
+
+
+
+
+
+<link href="/lib/font-awesome/css/font-awesome.min.css?v=4.6.2" rel="stylesheet" type="text/css" />
+
+<link href="/css/main.css?v=5.1.3" rel="stylesheet" type="text/css" />
+
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=5.1.3">
+
+
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=5.1.3">
+
+
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=5.1.3">
+
+
+  <link rel="mask-icon" href="/images/logo.svg?v=5.1.3" color="#222">
+
+
+
+
+
+  <meta name="keywords" content="Android,源码分析,插件化,ClassLoader," />
+
+
+
+
+
+  <link rel="alternate" href="/atom.xml" title="YMlion's Blog" type="application/atom+xml" />
+
+
+
+
+
+
+<meta name="description" content="类加载器的作用就是把程序或系统中用到的类加载到JVM虚拟机中，让程序或系统运行起来。android中的类加载器和纯java环境的类加载器是不同的，android中有自己的三个类加载器。ClassLoader是抽象类，定义了类加载器的功能方法，所有的类加载器都继承自ClassLoader，android中的三个类加载器是">
+<meta name="keywords" content="Android,源码分析,插件化,ClassLoader">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Android ClassLoader分析">
+<meta property="og:url" content="https://ymlion.com/post/android-classloader/index.html">
+<meta property="og:site_name" content="YMlion&#39;s Blog">
+<meta property="og:description" content="类加载器的作用就是把程序或系统中用到的类加载到JVM虚拟机中，让程序或系统运行起来。android中的类加载器和纯java环境的类加载器是不同的，android中有自己的三个类加载器。ClassLoader是抽象类，定义了类加载器的功能方法，所有的类加载器都继承自ClassLoader，android中的三个类加载器是BootClassLoader、PathClassLoader、DexClass">
+<meta property="og:locale" content="zh-Hans">
+<meta property="og:image" content="https://ymlion.com/post/android-classloader/classloader-classes.png">
+<meta property="og:updated_time" content="2018-04-08T03:49:49.978Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Android ClassLoader分析">
+<meta name="twitter:description" content="类加载器的作用就是把程序或系统中用到的类加载到JVM虚拟机中，让程序或系统运行起来。android中的类加载器和纯java环境的类加载器是不同的，android中有自己的三个类加载器。ClassLoader是抽象类，定义了类加载器的功能方法，所有的类加载器都继承自ClassLoader，android中的三个类加载器是BootClassLoader、PathClassLoader、DexClass">
+<meta name="twitter:image" content="https://ymlion.com/post/android-classloader/classloader-classes.png">
+
+
+
+<script type="text/javascript" id="hexo.configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Pisces',
+    version: '5.1.3',
+    sidebar: {"position":"left","display":"post","offset":12,"b2t":false,"scrollpercent":false,"onmobile":false},
+    fancybox: true,
+    tabs: true,
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    duoshuo: {
+      userId: '0',
+      author: '博主'
+    },
+    algolia: {
+      applicationID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    }
+  };
+</script>
+
+
+
+  <link rel="canonical" href="https://ymlion.com/post/android-classloader/"/>
+
+
+
+
+
+  <title>Android ClassLoader分析 | YMlion's Blog</title>
+  
+
+
+
+
+
+  <script type="text/javascript">
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?93ccb82075a783cf82b4e98bec7097e3";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" lang="zh-Hans">
+
+  
+  
+    
+  
+
+  <div class="container sidebar-position-left page-post-detail">
+    <div class="headband"></div>
+
+    <header id="header" class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-wrapper">
+  <div class="site-meta ">
+    
+
+    <div class="custom-logo-site-title">
+      <a href="/"  class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">YMlion's Blog</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+      
+        <p class="site-subtitle">写点什么</p>
+      
+  </div>
+
+  <div class="site-nav-toggle">
+    <button>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+    </button>
+  </div>
+</div>
+
+<nav class="site-nav">
+  
+
+  
+    <ul id="menu" class="menu">
+      
+        
+        <li class="menu-item menu-item-home">
+          <a href="/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-home"></i> <br />
+            
+            首页
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-tags">
+          <a href="/tags/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-tags"></i> <br />
+            
+            标签
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-categories">
+          <a href="/categories/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-th"></i> <br />
+            
+            分类
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-archives">
+          <a href="/archives/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-archive"></i> <br />
+            
+            归档
+          </a>
+        </li>
+      
+
+      
+    </ul>
+  
+
+  
+</nav>
+
+
+
+ </div>
+    </header>
+
+    <main id="main" class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          <div id="content" class="content">
+            
+
+  <div id="posts" class="posts-expand">
+    
+
+  
+
+  
+  
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="https://ymlion.com/post/android-classloader/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="YMlion">
+      <meta itemprop="description" content="">
+      <meta itemprop="image" content="/images/avatar.gif">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="YMlion's Blog">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">Android ClassLoader分析</h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">发表于</span>
+              
+              <time title="创建于" itemprop="dateCreated datePublished" datetime="2018-03-07T21:40:08+08:00">
+                2018-03-07
+              </time>
+            
+
+            
+
+            
+          </span>
+
+          
+            <span class="post-category" >
+            
+              <span class="post-meta-divider">|</span>
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">分类于</span>
+              
+              
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Android/" itemprop="url" rel="index">
+                    <span itemprop="name">Android</span>
+                  </a>
+                </span>
+
+                
+                
+                  ， 
+                
+              
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Android/插件化/" itemprop="url" rel="index">
+                    <span itemprop="name">插件化</span>
+                  </a>
+                </span>
+
+                
+                
+              
+            </span>
+          
+
+          
+            
+          
+
+          
+          
+
+          
+            <span class="post-meta-divider">|</span>
+            <span class="page-pv"><i class="fa fa-file-o"></i>
+            <span class="busuanzi-value" id="busuanzi_value_page_pv" ></span>
+            </span>
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        <p>类加载器的作用就是把程序或系统中用到的类加载到JVM虚拟机中，让程序或系统运行起来。android中的类加载器和纯java环境的类加载器是不同的，android中有自己的三个类加载器。<code>ClassLoader</code>是抽象类，定义了类加载器的功能方法，所有的类加载器都继承自<code>ClassLoader</code>，android中的三个类加载器是<code>BootClassLoader</code>、<code>PathClassLoader</code>、<code>DexClassLoader</code>，继承关系如下：</p>
+<img src="/post/android-classloader/classloader-classes.png" title="Android ClassLoader类图">
+<a id="more"></a>
+<h2 id="类加载器加载逻辑"><a href="#类加载器加载逻辑" class="headerlink" title="类加载器加载逻辑"></a>类加载器加载逻辑</h2><p>Java类加载逻辑是双亲委托模型，双亲委托简单来解释下就是当加载类时，当前的<code>classLoader</code>先去检查该类是否加载过，若没有加载则委托给父类加载器去加载，重复前面的逻辑直到找到该类或者父类加载器为空的祖宗类加载器，此时若还没找到该类，则去当前类加载器的类库路径去找，若没有则返回给其子类加载器，直到在某个路径下找到该类。</p>
+<blockquote>
+<p>父类加载器是指<code>ClassLoader</code>中parent变量对应的<code>ClassLoader</code>实例。</p>
+</blockquote>
+<p>虽然比较简单，但是<code>Talk is cheap. Show me the code</code>：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">protected</span> Class&lt;?&gt; loadClass(String name, <span class="keyword">boolean</span> resolve)</span><br><span class="line">    <span class="keyword">throws</span> ClassNotFoundException</span><br><span class="line">&#123;</span><br><span class="line">        <span class="comment">// First, check if the class has already been loaded</span></span><br><span class="line">        Class&lt;?&gt; c = findLoadedClass(name);</span><br><span class="line">        <span class="keyword">if</span> (c == <span class="keyword">null</span>) &#123;</span><br><span class="line">            <span class="keyword">try</span> &#123;</span><br><span class="line">                <span class="keyword">if</span> (parent != <span class="keyword">null</span>) &#123;</span><br><span class="line">                    c = parent.loadClass(name, <span class="keyword">false</span>);</span><br><span class="line">                &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">                    c = findBootstrapClassOrNull(name);</span><br><span class="line">                &#125;</span><br><span class="line">            &#125; <span class="keyword">catch</span> (ClassNotFoundException e) &#123;</span><br><span class="line">                <span class="comment">// ClassNotFoundException thrown if class not found</span></span><br><span class="line">                <span class="comment">// from the non-null parent class loader</span></span><br><span class="line">            &#125;</span><br><span class="line">            <span class="keyword">if</span> (c == <span class="keyword">null</span>) &#123;</span><br><span class="line">                <span class="comment">// If still not found, then invoke findClass in order</span></span><br><span class="line">                <span class="comment">// to find the class.</span></span><br><span class="line">                c = findClass(name);</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">return</span> c;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>还是代码直白易懂！也能看出双亲委托的好处：避免重复加载及更加安全。</p>
+<h2 id="BootClassLoader"><a href="#BootClassLoader" class="headerlink" title="BootClassLoader"></a>BootClassLoader</h2><p><code>BootClassLoader</code>是<code>ClassLoader</code>的内部类，该类的实例是单例模式，没法在外部调用，正常情况下也不会使用到这个类。但该类是android中所有<code>ClassLoader</code>实例的父类加载器，在系统启动的时候就已经完成了初始化。在前面的<a href="http://ymlion.com/2017/12/07/zygote-analysis/">Zygote进程分析</a>中说到<code>Zygote</code>进程首先就预加载了公共类和资源，其中加载公共类中的<code>preloadClasses</code>就对<code>BootClassLoader</code>进行了初始化，就一行代码<code>Class.forName(line, true, null)</code>，下面看下这个方法的具体逻辑：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> Class&lt;?&gt; forName(String name, <span class="keyword">boolean</span> initialize,</span><br><span class="line">                               ClassLoader loader)</span><br><span class="line">    <span class="keyword">throws</span> ClassNotFoundException</span><br><span class="line">&#123;</span><br><span class="line">    <span class="keyword">if</span> (loader == <span class="keyword">null</span>) &#123;<span class="comment">// 就是这个地方了</span></span><br><span class="line">        loader = BootClassLoader.getInstance();</span><br><span class="line">    &#125;</span><br><span class="line">    Class&lt;?&gt; result;</span><br><span class="line">    <span class="keyword">try</span> &#123;</span><br><span class="line">        result = classForName(name, initialize, loader);</span><br><span class="line">    &#125; <span class="keyword">catch</span> (ClassNotFoundException e) &#123;</span><br><span class="line">        Throwable cause = e.getCause();</span><br><span class="line">        <span class="keyword">if</span> (cause <span class="keyword">instanceof</span> LinkageError) &#123;</span><br><span class="line">            <span class="keyword">throw</span> (LinkageError) cause;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">throw</span> e;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> result;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>参数<code>loader</code>每次都是空的，<code>BootClassLoader</code>就生成一个单例实例，也就是说<code>BootClassLoader</code>是用来加载系统常用类。</p>
+<h2 id="PathClassLoader"><a href="#PathClassLoader" class="headerlink" title="PathClassLoader"></a>PathClassLoader</h2><p>android默认使用<code>PathClassLoader</code>来加载系统类和应用程序中的类，该类加载器只是对<code>BaseDexClass</code>类的简单封装，只提供了构造方法。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">PathClassLoader</span> <span class="keyword">extends</span> <span class="title">BaseDexClassLoader</span> </span>&#123;</span><br><span class="line">    <span class="comment">// 注意第二个参数为null，这也是和DexClassLoader的唯一区别</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="title">PathClassLoader</span><span class="params">(String dexPath, ClassLoader parent)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">super</span>(dexPath, <span class="keyword">null</span>, <span class="keyword">null</span>, parent);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">// 注意第二个参数为null，这也是和DexClassLoader的唯一区别</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="title">PathClassLoader</span><span class="params">(String dexPath, String librarySearchPath, ClassLoader parent)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">super</span>(dexPath, <span class="keyword">null</span>, librarySearchPath, parent);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>android系统中的<code>PathClassLoader</code>实例初始化是很早的，因为其作用很重要，同样回到<code>ZygoteInit</code>中，在<code>Zygote</code>创建完<code>SystemServer</code>之后调用<code>handleSystemServerProcess</code>方法处理后续工作，在该方法中有几行代码就是来创建<code>PathClassLoader</code>的：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">handleSystemServerProcess</span><span class="params">(</span></span></span><br><span class="line"><span class="function"><span class="params">        ZygoteConnection.Arguments parsedArgs)</span></span></span><br><span class="line"><span class="function">        <span class="keyword">throws</span> Zygote.MethodAndArgsCaller </span>&#123;</span><br><span class="line">    <span class="keyword">final</span> String systemServerClasspath = Os.getenv(<span class="string">"SYSTEMSERVERCLASSPATH"</span>);</span><br><span class="line">    <span class="comment">// 省略</span></span><br><span class="line">    <span class="keyword">if</span> (parsedArgs.invokeWith != <span class="keyword">null</span>) &#123;</span><br><span class="line">        <span class="comment">// 省略</span></span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        ClassLoader cl = <span class="keyword">null</span>;</span><br><span class="line">        <span class="keyword">if</span> (systemServerClasspath != <span class="keyword">null</span>) &#123;<span class="comment">// 在这里创建系统的PathClassLoader</span></span><br><span class="line">            cl = createPathClassLoader(systemServerClasspath, parsedArgs.targetSdkVersion);</span><br><span class="line">            Thread.currentThread().setContextClassLoader(cl);</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="comment">/*</span></span><br><span class="line"><span class="comment">         * Pass the remaining arguments to SystemServer.主要看这个方法，正常systemserver执行的地方</span></span><br><span class="line"><span class="comment">         */</span></span><br><span class="line">        ZygoteInit.zygoteInit(parsedArgs.targetSdkVersion, parsedArgs.remainingArgs, cl);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">static</span> PathClassLoader <span class="title">createPathClassLoader</span><span class="params">(String classPath, <span class="keyword">int</span> targetSdkVersion)</span> </span>&#123;</span><br><span class="line">  String libraryPath = System.getProperty(<span class="string">"java.library.path"</span>);</span><br><span class="line">  <span class="keyword">return</span> PathClassLoaderFactory.createClassLoader(classPath,</span><br><span class="line">                                                  libraryPath,</span><br><span class="line">                                                  libraryPath,</span><br><span class="line">                                                  ClassLoader.getSystemClassLoader(),</span><br><span class="line">                                                  targetSdkVersion,</span><br><span class="line">                                                  <span class="keyword">true</span> <span class="comment">/* isNamespaceShared */</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>在<code>PathClassLoaderFactory.createClassLoader</code>方法中就直接<code>new</code>了一个<code>PathClassLoader</code>对象：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">PathClassLoader pathClassloader = <span class="keyword">new</span> PathClassLoader(dexPath, librarySearchPath, parent);</span><br></pre></td></tr></table></figure>
+<p>这里关注下第三个参数<code>parent</code>，就是前面传递过来的<code>ClassLoader.getSystemClassLoader()</code>，这个方法最终调用<code>ClassLoader.createSystemClassLoader</code>方法来创建：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">static</span> ClassLoader <span class="title">createSystemClassLoader</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    String classPath = System.getProperty(<span class="string">"java.class.path"</span>, <span class="string">"."</span>);</span><br><span class="line">    String librarySearchPath = System.getProperty(<span class="string">"java.library.path"</span>, <span class="string">""</span>);</span><br><span class="line">    <span class="keyword">return</span> <span class="keyword">new</span> PathClassLoader(classPath, librarySearchPath, BootClassLoader.getInstance());</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>可以看出这个地方相当于创建了两个<code>PathClassLoader</code>实例，后者是前者的父类加载器，后者的父类加载器是<code>Zygote</code>预加载时创建的<code>BootClassLoader</code>对象。</p>
+<h2 id="DexClassLoader"><a href="#DexClassLoader" class="headerlink" title="DexClassLoader"></a>DexClassLoader</h2><p><code>DexClassLoader</code>主要用于加载第三方dex或者包含dex的jar、apk文件，这也是插件化或者热修复中用到最多的类加载器。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">DexClassLoader</span> <span class="keyword">extends</span> <span class="title">BaseDexClassLoader</span> </span>&#123;</span><br><span class="line">    <span class="comment">// 第二个参数是一个非null文件</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="title">DexClassLoader</span><span class="params">(String dexPath, String optimizedDirectory,</span></span></span><br><span class="line"><span class="function"><span class="params">            String librarySearchPath, ClassLoader parent)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">super</span>(dexPath, <span class="keyword">new</span> File(optimizedDirectory), librarySearchPath, parent);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>可以看出<code>DexClassLoader</code>和<code>PathClassLoader</code>都比较简单，只提供了简单的构造方法用于区分，最主要的实现还是在<code>BaseDexClassLoader</code>中， 上面的参数以及android类加载器具体实现下面再细说。</p>
+<h2 id="BaseDexClassLoader"><a href="#BaseDexClassLoader" class="headerlink" title="BaseDexClassLoader"></a>BaseDexClassLoader</h2><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="title">BaseDexClassLoader</span><span class="params">(String dexPath, File optimizedDirectory,</span></span></span><br><span class="line"><span class="function"><span class="params">            String librarySearchPath, ClassLoader parent)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">super</span>(parent);</span><br><span class="line">    <span class="comment">// 这里已经不需要optimizedDirectory这个参数了</span></span><br><span class="line">    <span class="keyword">this</span>.pathList = <span class="keyword">new</span> DexPathList(<span class="keyword">this</span>, dexPath, librarySearchPath, <span class="keyword">null</span>);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (reporter != <span class="keyword">null</span>) &#123;</span><br><span class="line">        reporter.report(<span class="keyword">this</span>.pathList.getDexPaths());</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>这是构造方法，先来看下前三个参数：</p>
+<ul>
+<li><code>dexPath</code>：jar/apk文件列表，用<code>:</code>分割；</li>
+<li><code>optimizedDirectory</code>：dex解压之后存放目录，必须是内部存储目录，这个也是<code>DexClassLoader</code>和<code>PathClassLoader</code>唯一不同的一个参数，在<code>SDK26</code>的源码中上面的注释已经说了这个参数<strong>完全没用</strong>了，也就是说两者没有区别了；</li>
+<li><code>librarySearchPath</code>：包含本地库的文件夹列表，用<code>:</code>分割。</li>
+</ul>
+<p>这几个参数主要用于初始化成员变量<code>DexPathList</code>对象<code>pathList</code>，该对象保存了所有的dex文件相关信息，大部分逻辑也是和该对象有关系。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">protected</span> Class&lt;?&gt; findClass(String name) <span class="keyword">throws</span> ClassNotFoundException &#123;</span><br><span class="line">    List&lt;Throwable&gt; suppressedExceptions = <span class="keyword">new</span> ArrayList&lt;Throwable&gt;();</span><br><span class="line">    Class c = pathList.findClass(name, suppressedExceptions);</span><br><span class="line">    <span class="keyword">if</span> (c == <span class="keyword">null</span>) &#123;</span><br><span class="line">        ClassNotFoundException cnfe = <span class="keyword">new</span> ClassNotFoundException(</span><br><span class="line">                <span class="string">"Didn't find class \""</span> + name + <span class="string">"\" on path: "</span> + pathList);</span><br><span class="line">        <span class="keyword">for</span> (Throwable t : suppressedExceptions) &#123;</span><br><span class="line">            cnfe.addSuppressed(t);</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">throw</span> cnfe;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> c;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>类加载器的主要实现就是<code>findClass</code>方法，可以看到是<code>pathList</code>对象去调用其<code>findClass</code>方法，最终在native层实现，这里就不深究了。看到<code>findClass</code>方法的实现，我们也能想到如何合并dex，例如合并插件的<code>classLoader</code>，这里的重点就是<code>pathList</code>对象，通过反射将不同的<code>pathList</code>合并为一个，就是合并该对象中的dex列表。</p>
+<h2 id="PathClassLoader和DexClassLoader区别"><a href="#PathClassLoader和DexClassLoader区别" class="headerlink" title="PathClassLoader和DexClassLoader区别"></a>PathClassLoader和DexClassLoader区别</h2><p>前面也说了，区别就是构造方法的第二个参数，即有没有自定义一个内部文件夹来保存解压后的dex。看上面的源码已经发现至少在android8.0上，该参数没有作用，即两者效果一样。那原来的区别到底是什么呢？这里看下android4.4的源码，在<code>DexFile</code>对应的本地实现<code>art/runtime/native/dalvik_system_DexFile.cc</code>中的<code>openDexFileNative</code>方法中有这么几行：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> (outputName.c_str() == <span class="literal">NULL</span>) &#123;</span><br><span class="line">    dex_file = linker-&gt;FindDexFileInOatFileFromDexLocation(dex_location, dex_location_checksum);</span><br><span class="line">  &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">    <span class="built_in">std</span>::<span class="built_in">string</span> oat_location(outputName.c_str());</span><br><span class="line">    dex_file = linker-&gt;FindOrCreateOatFileForDexLocation(dex_location, dex_location_checksum, oat_location);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p><code>outputName.c_str()</code>就是上面<code>optimizedDirectory</code>路径，在这里有了区分。下面看下<code>art/runtime/class_linker.cc</code>类，分别找到对应的两个方法：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">const</span> DexFile* ClassLinker::FindDexFileInOatFileFromDexLocation(<span class="keyword">const</span> <span class="built_in">std</span>::<span class="built_in">string</span>&amp; dex_location,</span><br><span class="line">                                                                <span class="keyword">uint32_t</span> dex_location_checksum) &#123;</span><br><span class="line">  <span class="comment">// 该方法省略了很多</span></span><br><span class="line">  <span class="comment">// Look for an existing file in the dalvik-cache, validating the result if found</span></span><br><span class="line">  <span class="comment">// not found in /foo/bar/baz.odex? try /data/dalvik-cache/foo@bar@baz.jar@classes.dex</span></span><br><span class="line">  std::string cache_location(GetDalvikCacheFilenameOrDie(dex_location));</span><br><span class="line">  oat_file.reset(FindOatFileFromOatLocationLocked(cache_location));</span><br><span class="line"></span><br><span class="line">  <span class="comment">// Try to generate oat file if it wasn't found or was obsolete.</span></span><br><span class="line">  std::string oat_cache_filename(GetDalvikCacheFilenameOrDie(dex_location));</span><br><span class="line">  <span class="keyword">return</span> FindOrCreateOatFileForDexLocationLocked(dex_location, dex_location_checksum, oat_cache_filename);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">const</span> DexFile* ClassLinker::FindOrCreateOatFileForDexLocation(<span class="keyword">const</span> <span class="built_in">std</span>::<span class="built_in">string</span>&amp; dex_location,</span><br><span class="line">                                                              <span class="keyword">uint32_t</span> dex_location_checksum,</span><br><span class="line">                                                              <span class="keyword">const</span> <span class="built_in">std</span>::<span class="built_in">string</span>&amp; oat_location) &#123;</span><br><span class="line">  WriterMutexLock mu(Thread::Current(), dex_lock_);</span><br><span class="line">  <span class="keyword">return</span> FindOrCreateOatFileForDexLocationLocked(dex_location, dex_location_checksum, oat_location);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>对比上面两个方法，可以发现最终都调用同样一个方法，区别就是当<code>optimizedDirectory</code>为<code>null</code>时，需要去生成这个目录，这个目录就是<code>/data/dalvik-cache/</code>。</p>
+<p>至此，<code>PathClassLoader</code>和<code>DexClassLoader</code>的区别也就明了了，就是<code>PathClassLoader</code>只能加载系统安装过的apk，其dex保存在<code>/data/dalvik-cache</code>中；而<code>DexClassLoader</code>可以去加载外部存储中存在的jar/apk文件。</p>
+<p>经过测试以及源码研究，发现在android5.0以下是有这个区别的，其他就是像上面构造方法显示的一样，<strong>就结果来说两者没有区别</strong>。具体android5.0–7.1的源码没有仔细研究，每个版本都不相同，变化差异很大，以上是在模拟器上测试得出的结论。两者的区别是一个比较重要的知识点，现在应该比较清晰了。</p>
+<blockquote>
+<p>在<strong>模拟器</strong>上测试发现，android8.0之后，<code>PathClassLoader</code>和<code>DexClassLoader</code><strong>加载外部存储器</strong>上的jar/apk文件会<strong>崩溃</strong>，因此只能copy到内部存储器中去加载。</p>
+</blockquote>
+<h2 id="小结"><a href="#小结" class="headerlink" title="小结"></a>小结</h2><p>类加载的双亲委托模型是一个很好的设计，值得我们学习和思考。android系统的类加载器都有各自的分工：</p>
+<ul>
+<li><code>BootClassLoader</code>：系统启动时加载公共类，并作为所有<code>ClassLoader</code>的<code>parent</code>；</li>
+<li><code>PathClassLoader</code>：<code>SystemServer</code>启动后去创建，用于加载系统类及程序类；同样可以加载插件；</li>
+<li><code>DexClassLoader</code>：用于加载插件，在<code>android5.0</code>及其以后与<code>PathClassLoader</code>没有区别。</li>
+</ul>
+
+      
+    </div>
+    
+    
+    
+
+    
+
+    
+
+    
+
+    <footer class="post-footer">
+      
+        <div class="post-tags">
+          
+            <a href="/tags/Android/" rel="tag"># Android</a>
+          
+            <a href="/tags/源码分析/" rel="tag"># 源码分析</a>
+          
+            <a href="/tags/插件化/" rel="tag"># 插件化</a>
+          
+            <a href="/tags/ClassLoader/" rel="tag"># ClassLoader</a>
+          
+        </div>
+      
+
+      
+      
+      
+
+      
+        <div class="post-nav">
+          <div class="post-nav-next post-nav-item">
+            
+              <a href="/post/virtualapk-analysis-1/" rel="next" title="VirtualAPK加载分析">
+                <i class="fa fa-chevron-left"></i> VirtualAPK加载分析
+              </a>
+            
+          </div>
+
+          <span class="post-nav-divider"></span>
+
+          <div class="post-nav-prev post-nav-item">
+            
+              <a href="/post/virtualapk-analysis-2/" rel="prev" title="VirtualAPK原理分析之Activity启动">
+                VirtualAPK原理分析之Activity启动 <i class="fa fa-chevron-right"></i>
+              </a>
+            
+          </div>
+        </div>
+      
+
+      
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+
+    <div class="post-spread">
+      
+    </div>
+  </div>
+
+
+          </div>
+          
+
+
+          
+
+  
+
+
+
+        </div>
+        
+          
+  
+  <div class="sidebar-toggle">
+    <div class="sidebar-toggle-line-wrap">
+      <span class="sidebar-toggle-line sidebar-toggle-line-first"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-middle"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-last"></span>
+    </div>
+  </div>
+
+  <aside id="sidebar" class="sidebar">
+    
+    <div class="sidebar-inner">
+
+      
+
+      
+        <ul class="sidebar-nav motion-element">
+          <li class="sidebar-nav-toc sidebar-nav-active" data-target="post-toc-wrap">
+            文章目录
+          </li>
+          <li class="sidebar-nav-overview" data-target="site-overview-wrap">
+            站点概览
+          </li>
+        </ul>
+      
+
+      <section class="site-overview-wrap sidebar-panel">
+        <div class="site-overview">
+          <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+            
+              <p class="site-author-name" itemprop="name">YMlion</p>
+              <p class="site-description motion-element" itemprop="description">业精于勤，荒于嬉；行成于思，毁于随。</p>
+          </div>
+
+          <nav class="site-state motion-element">
+
+            
+              <div class="site-state-item site-state-posts">
+              
+                <a href="/archives/">
+              
+                  <span class="site-state-item-count">10</span>
+                  <span class="site-state-item-name">日志</span>
+                </a>
+              </div>
+            
+
+            
+              
+              
+              <div class="site-state-item site-state-categories">
+                <a href="/categories/index.html">
+                  <span class="site-state-item-count">3</span>
+                  <span class="site-state-item-name">分类</span>
+                </a>
+              </div>
+            
+
+            
+              
+              
+              <div class="site-state-item site-state-tags">
+                <a href="/tags/index.html">
+                  <span class="site-state-item-count">10</span>
+                  <span class="site-state-item-name">标签</span>
+                </a>
+              </div>
+            
+
+          </nav>
+
+          
+            <div class="feed-link motion-element">
+              <a href="/atom.xml" rel="alternate">
+                <i class="fa fa-rss"></i>
+                RSS
+              </a>
+            </div>
+          
+
+          <div class="links-of-author motion-element">
+            
+              
+                <span class="links-of-author-item">
+                  <a href="https://github.com/YMlion" target="_blank" title="GitHub">
+                    
+                      <i class="fa fa-fw fa-github"></i>GitHub</a>
+                </span>
+              
+                <span class="links-of-author-item">
+                  <a href="mailto:lmion.yao@gmail.com" target="_blank" title="E-Mail">
+                    
+                      <i class="fa fa-fw fa-envelope"></i>E-Mail</a>
+                </span>
+              
+            
+          </div>
+
+          
+          
+
+          
+          
+
+          
+
+        </div>
+      </section>
+
+      
+      <!--noindex-->
+        <section class="post-toc-wrap motion-element sidebar-panel sidebar-panel-active">
+          <div class="post-toc">
+
+            
+              
+            
+
+            
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#类加载器加载逻辑"><span class="nav-number">1.</span> <span class="nav-text">类加载器加载逻辑</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#BootClassLoader"><span class="nav-number">2.</span> <span class="nav-text">BootClassLoader</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#PathClassLoader"><span class="nav-number">3.</span> <span class="nav-text">PathClassLoader</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#DexClassLoader"><span class="nav-number">4.</span> <span class="nav-text">DexClassLoader</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#BaseDexClassLoader"><span class="nav-number">5.</span> <span class="nav-text">BaseDexClassLoader</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#PathClassLoader和DexClassLoader区别"><span class="nav-number">6.</span> <span class="nav-text">PathClassLoader和DexClassLoader区别</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#小结"><span class="nav-number">7.</span> <span class="nav-text">小结</span></a></li></ol></div>
+            
+
+          </div>
+        </section>
+      <!--/noindex-->
+      
+
+      
+
+    </div>
+  </aside>
+
+
+        
+      </div>
+    </main>
+
+    <footer id="footer" class="footer">
+      <div class="footer-inner">
+        <div class="copyright">&copy; 2015 &mdash; <span itemprop="copyrightYear">2018</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">YMlion</span>
+
+  
+</div>
+
+
+  <div class="powered-by">由 <a class="theme-link" target="_blank" href="https://hexo.io">Hexo</a> 强力驱动</div>
+
+
+
+  <span class="post-meta-divider">|</span>
+
+
+
+  <div class="theme-info">主题 &mdash; <a class="theme-link" target="_blank" href="https://github.com/iissnan/hexo-theme-next">NexT.Pisces</a></div>
+
+
+
+
+        
+<div class="busuanzi-count">
+  <script async src="https://dn-lbstatics.qbox.me/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+  
+    <span class="site-uv">
+      <i class="fa fa-user"></i>
+      <span class="busuanzi-value" id="busuanzi_value_site_uv"></span>
+      
+    </span>
+  
+
+  
+    <span class="site-pv">
+      <i class="fa fa-eye"></i>
+      <span class="busuanzi-value" id="busuanzi_value_site_pv"></span>
+      
+    </span>
+  
+</div>
+
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+
+    
+      <div class="back-to-top">
+        <i class="fa fa-arrow-up"></i>
+        
+      </div>
+    
+
+    
+
+  </div>
+
+  
+
+<script type="text/javascript">
+  if (Object.prototype.toString.call(window.Promise) !== '[object Function]') {
+    window.Promise = null;
+  }
+</script>
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+    <script type="text/javascript" src="/lib/jquery/index.js?v=2.1.3"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/fastclick/lib/fastclick.min.js?v=1.0.6"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/jquery_lazyload/jquery.lazyload.js?v=1.9.7"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/fancybox/source/jquery.fancybox.pack.js?v=2.1.5"></script>
+  
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/utils.js?v=5.1.3"></script>
+
+  <script type="text/javascript" src="/js/src/motion.js?v=5.1.3"></script>
+
+
+
+  
+  
+
+
+  <script type="text/javascript" src="/js/src/affix.js?v=5.1.3"></script>
+
+  <script type="text/javascript" src="/js/src/schemes/pisces.js?v=5.1.3"></script>
+
+
+
+  
+  <script type="text/javascript" src="/js/src/scrollspy.js?v=5.1.3"></script>
+<script type="text/javascript" src="/js/src/post-details.js?v=5.1.3"></script>
+
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/bootstrap.js?v=5.1.3"></script>
+
+
+
+  
+
+
+  
+
+
+
+
+	
+
+
+
+
+
+  
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+
+  
+
+  
+
+  
+
+  
+  
+
+  
+
+  
+
+  
+
+</body>
+</html>

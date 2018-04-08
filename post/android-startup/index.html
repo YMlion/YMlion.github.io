@@ -1,0 +1,863 @@
+<!DOCTYPE html>
+
+
+
+  
+
+
+<html class="theme-next pisces use-motion" lang="zh-Hans">
+<head>
+  <meta charset="UTF-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
+<meta name="theme-color" content="#222">
+
+
+
+
+
+
+
+
+
+<meta http-equiv="Cache-Control" content="no-transform" />
+<meta http-equiv="Cache-Control" content="no-siteapp" />
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+  <link href="/lib/fancybox/source/jquery.fancybox.css?v=2.1.5" rel="stylesheet" type="text/css" />
+
+
+
+
+
+
+
+<link href="/lib/font-awesome/css/font-awesome.min.css?v=4.6.2" rel="stylesheet" type="text/css" />
+
+<link href="/css/main.css?v=5.1.3" rel="stylesheet" type="text/css" />
+
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=5.1.3">
+
+
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=5.1.3">
+
+
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=5.1.3">
+
+
+  <link rel="mask-icon" href="/images/logo.svg?v=5.1.3" color="#222">
+
+
+
+
+
+  <meta name="keywords" content="Android,源码分析,Zygote," />
+
+
+
+
+
+  <link rel="alternate" href="/atom.xml" title="YMlion's Blog" type="application/atom+xml" />
+
+
+
+
+
+
+<meta name="description" content="android系统的第一个进程是init，init进程通过解析init.rc文件来启动android系统服务进程，最重要是Zygote进程和ServiceManage。启动相关的代码也一直随着版本变化，下面基于8.0.0_r4版本来看下这两个进程的启动过程。">
+<meta name="keywords" content="Android,源码分析,Zygote">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Android启动过程分析">
+<meta property="og:url" content="https://ymlion.com/post/android-startup/index.html">
+<meta property="og:site_name" content="YMlion&#39;s Blog">
+<meta property="og:description" content="android系统的第一个进程是init，init进程通过解析init.rc文件来启动android系统服务进程，最重要是Zygote进程和ServiceManage。启动相关的代码也一直随着版本变化，下面基于8.0.0_r4版本来看下这两个进程的启动过程。">
+<meta property="og:locale" content="zh-Hans">
+<meta property="og:updated_time" content="2018-04-08T03:49:49.981Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Android启动过程分析">
+<meta name="twitter:description" content="android系统的第一个进程是init，init进程通过解析init.rc文件来启动android系统服务进程，最重要是Zygote进程和ServiceManage。启动相关的代码也一直随着版本变化，下面基于8.0.0_r4版本来看下这两个进程的启动过程。">
+
+
+
+<script type="text/javascript" id="hexo.configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Pisces',
+    version: '5.1.3',
+    sidebar: {"position":"left","display":"post","offset":12,"b2t":false,"scrollpercent":false,"onmobile":false},
+    fancybox: true,
+    tabs: true,
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    duoshuo: {
+      userId: '0',
+      author: '博主'
+    },
+    algolia: {
+      applicationID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    }
+  };
+</script>
+
+
+
+  <link rel="canonical" href="https://ymlion.com/post/android-startup/"/>
+
+
+
+
+
+  <title>Android启动过程分析 | YMlion's Blog</title>
+  
+
+
+
+
+
+  <script type="text/javascript">
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?93ccb82075a783cf82b4e98bec7097e3";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" lang="zh-Hans">
+
+  
+  
+    
+  
+
+  <div class="container sidebar-position-left page-post-detail">
+    <div class="headband"></div>
+
+    <header id="header" class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-wrapper">
+  <div class="site-meta ">
+    
+
+    <div class="custom-logo-site-title">
+      <a href="/"  class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">YMlion's Blog</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+      
+        <p class="site-subtitle">写点什么</p>
+      
+  </div>
+
+  <div class="site-nav-toggle">
+    <button>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+    </button>
+  </div>
+</div>
+
+<nav class="site-nav">
+  
+
+  
+    <ul id="menu" class="menu">
+      
+        
+        <li class="menu-item menu-item-home">
+          <a href="/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-home"></i> <br />
+            
+            首页
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-tags">
+          <a href="/tags/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-tags"></i> <br />
+            
+            标签
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-categories">
+          <a href="/categories/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-th"></i> <br />
+            
+            分类
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-archives">
+          <a href="/archives/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-archive"></i> <br />
+            
+            归档
+          </a>
+        </li>
+      
+
+      
+    </ul>
+  
+
+  
+</nav>
+
+
+
+ </div>
+    </header>
+
+    <main id="main" class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          <div id="content" class="content">
+            
+
+  <div id="posts" class="posts-expand">
+    
+
+  
+
+  
+  
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="https://ymlion.com/post/android-startup/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="YMlion">
+      <meta itemprop="description" content="">
+      <meta itemprop="image" content="/images/avatar.gif">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="YMlion's Blog">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">Android启动过程分析</h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">发表于</span>
+              
+              <time title="创建于" itemprop="dateCreated datePublished" datetime="2017-11-29T21:32:48+08:00">
+                2017-11-29
+              </time>
+            
+
+            
+
+            
+          </span>
+
+          
+            <span class="post-category" >
+            
+              <span class="post-meta-divider">|</span>
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">分类于</span>
+              
+              
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Android/" itemprop="url" rel="index">
+                    <span itemprop="name">Android</span>
+                  </a>
+                </span>
+
+                
+                
+                  ， 
+                
+              
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Android/源码分析/" itemprop="url" rel="index">
+                    <span itemprop="name">源码分析</span>
+                  </a>
+                </span>
+
+                
+                
+              
+            </span>
+          
+
+          
+            
+          
+
+          
+          
+
+          
+            <span class="post-meta-divider">|</span>
+            <span class="page-pv"><i class="fa fa-file-o"></i>
+            <span class="busuanzi-value" id="busuanzi_value_page_pv" ></span>
+            </span>
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        <p>android系统的第一个进程是<code>init</code>，<code>init</code>进程通过解析<code>init.rc</code>文件来启动android系统服务进程，最重要是<code>Zygote</code>进程和<code>ServiceManage</code>。启动相关的代码也一直随着版本变化，下面基于<a href="https://www.androidos.net.cn/android/8.0.0_r4/xref" target="_blank" rel="noopener">8.0.0_r4</a>版本来看下这两个进程的启动过程。</p>
+<a id="more"></a>
+<blockquote>
+<p>rc文件相关语法在<code>/system/core/init/README.md</code>中有详细介绍。</p>
+</blockquote>
+<h2 id="ServiceManager"><a href="#ServiceManager" class="headerlink" title="ServiceManager"></a>ServiceManager</h2><p>在<code>system/core/rootdir/init.rc</code>中可以找到相关<code>servicemanager</code>的部分：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">on post-fs</span><br><span class="line">    # Load properties from</span><br><span class="line">    #     /system/build.prop,</span><br><span class="line">    #     /odm/build.prop,</span><br><span class="line">    #     /vendor/build.prop and</span><br><span class="line">    #     /factory/factory.prop</span><br><span class="line">    load_system_props</span><br><span class="line">    # start essential services</span><br><span class="line">    start logd</span><br><span class="line">    start servicemanager</span><br><span class="line">    start hwservicemanager</span><br><span class="line">    start vndservicemanager</span><br><span class="line">    ........</span><br></pre></td></tr></table></figure>
+<p>在<code>post-fs</code>action触发后，就直接启动了几个必要的服务，其中就包括<code>servicemanager</code>，这个时候还要看一下<code>post-fs</code>是在什么时候触发的：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br></pre></td><td class="code"><pre><span class="line"># Mount filesystems and start core system services.</span><br><span class="line">on late-init</span><br><span class="line">    trigger early-fs</span><br><span class="line"></span><br><span class="line">    # Mount fstab in init.&#123;$device&#125;.rc by mount_all command. Optional parameter</span><br><span class="line">    # &apos;--early&apos; can be specified to skip entries with &apos;latemount&apos;.</span><br><span class="line">    # /system and /vendor must be mounted by the end of the fs stage,</span><br><span class="line">    # while /data is optional.</span><br><span class="line">    trigger fs</span><br><span class="line">    # 就在这了</span><br><span class="line">    trigger post-fs</span><br><span class="line"></span><br><span class="line">    # Mount fstab in init.&#123;$device&#125;.rc by mount_all with &apos;--late&apos; parameter</span><br><span class="line">    # to only mount entries with &apos;latemount&apos;. This is needed if &apos;--early&apos; is</span><br><span class="line">    # specified in the previous mount_all command on the fs stage.</span><br><span class="line">    # With /system mounted and properties form /system + /factory available,</span><br><span class="line">    # some services can be started.</span><br><span class="line">    trigger late-fs</span><br><span class="line"></span><br><span class="line">    # Now we can mount /data. File encryption requires keymaster to decrypt</span><br><span class="line">    # /data, which in turn can only be loaded when system properties are present.</span><br><span class="line">    trigger post-fs-data</span><br><span class="line"></span><br><span class="line">    # Now we can start zygote for devices with file based encryption</span><br><span class="line">    # 这个也值得注意</span><br><span class="line">    trigger zygote-start</span><br><span class="line"></span><br><span class="line">    # Load persist properties and override properties (if enabled) from /data.</span><br><span class="line">    trigger load_persist_props_action</span><br><span class="line"></span><br><span class="line">    # Remove a file to wake up anything waiting for firmware.</span><br><span class="line">    trigger firmware_mounts_complete</span><br><span class="line"></span><br><span class="line">    trigger early-boot</span><br><span class="line">    trigger boot</span><br></pre></td></tr></table></figure>
+<p>在<code>late-init</code>触发后，就会执行<code>post-fs</code>，当然稍微向后看几步，就能看的<code>zygote-start</code>也被触发了，这个也就是启动<code>zygote</code>进程的。</p>
+<p>同样<code>late-init</code>的触发也是需要前提的，继续看：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"># Healthd can trigger a full boot from charger mode by signaling this</span><br><span class="line"># property when the power button is held.</span><br><span class="line">on property:sys.boot_from_charger_mode=1</span><br><span class="line">    class_stop charger</span><br><span class="line">    trigger late-init</span><br></pre></td></tr></table></figure>
+<p>这是其中一处，真正正常启动不是这个地方，<code>init.rc</code>中找不到，再去<code>system/core/init/init.cpp</code>中看一下<code>main</code>函数：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br></pre></td><td class="code"><pre><span class="line">......</span><br><span class="line">am.QueueEventTrigger(<span class="string">"early-init"</span>);</span><br><span class="line"></span><br><span class="line"><span class="comment">// Queue an action that waits for coldboot done so we know ueventd has set up all of /dev...</span></span><br><span class="line">am.QueueBuiltinAction(wait_for_coldboot_done_action, <span class="string">"wait_for_coldboot_done"</span>);</span><br><span class="line"><span class="comment">// ... so that we can start queuing up actions that require stuff from /dev.</span></span><br><span class="line">am.QueueBuiltinAction(mix_hwrng_into_linux_rng_action, <span class="string">"mix_hwrng_into_linux_rng"</span>);</span><br><span class="line">am.QueueBuiltinAction(set_mmap_rnd_bits_action, <span class="string">"set_mmap_rnd_bits"</span>);</span><br><span class="line">am.QueueBuiltinAction(set_kptr_restrict_action, <span class="string">"set_kptr_restrict"</span>);</span><br><span class="line">am.QueueBuiltinAction(keychord_init_action, <span class="string">"keychord_init"</span>);</span><br><span class="line">am.QueueBuiltinAction(console_init_action, <span class="string">"console_init"</span>);</span><br><span class="line"></span><br><span class="line"><span class="comment">// Trigger all the boot actions to get us started.</span></span><br><span class="line">am.QueueEventTrigger(<span class="string">"init"</span>);</span><br><span class="line"></span><br><span class="line"><span class="comment">// Repeat mix_hwrng_into_linux_rng in case /dev/hw_random or /dev/random</span></span><br><span class="line"><span class="comment">// wasn't ready immediately after wait_for_coldboot_done</span></span><br><span class="line">am.QueueBuiltinAction(mix_hwrng_into_linux_rng_action, <span class="string">"mix_hwrng_into_linux_rng"</span>);</span><br><span class="line"></span><br><span class="line"><span class="comment">// Don't mount filesystems or start core system services in charger mode.</span></span><br><span class="line"><span class="built_in">std</span>::<span class="built_in">string</span> bootmode = GetProperty(<span class="string">"ro.bootmode"</span>, <span class="string">""</span>);</span><br><span class="line"><span class="keyword">if</span> (bootmode == <span class="string">"charger"</span>) &#123;</span><br><span class="line">    am.QueueEventTrigger(<span class="string">"charger"</span>);</span><br><span class="line">&#125; <span class="keyword">else</span> &#123;</span><br><span class="line">    am.QueueEventTrigger(<span class="string">"late-init"</span>);</span><br><span class="line">&#125;</span><br><span class="line">......</span><br><span class="line"><span class="comment">// 后面就是一个while(true)循环</span></span><br></pre></td></tr></table></figure>
+<p>在<code>main</code>函数最后部分，可以看到依次触发了<code>erlay-init</code>、<code>init</code>、<code>late-init</code>action，在这里终于找到了<code>servicemanager</code>和<code>zygote</code>进程启动的前提。</p>
+<p>最后看下<code>servicemanager</code>服务（<code>frameworks/native/cmds/servicemanager/servicemanager.rc</code>）：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"># 名称及该程序的设备存储路径</span><br><span class="line">service servicemanager /system/bin/servicemanager</span><br><span class="line">    # class名称</span><br><span class="line">    class core animation</span><br><span class="line">    # 用户</span><br><span class="line">    user system</span><br><span class="line">    # 用户组</span><br><span class="line">    group system readproc</span><br><span class="line">    # 表明至关重要</span><br><span class="line">    critical</span><br><span class="line">    # 重启该服务，则需要重启以下服务</span><br><span class="line">    onrestart restart healthd</span><br><span class="line">    onrestart restart zygote</span><br><span class="line">    onrestart restart audioserver</span><br><span class="line">    onrestart restart media</span><br><span class="line">    onrestart restart surfaceflinger</span><br><span class="line">    onrestart restart inputflinger</span><br><span class="line">    onrestart restart drm</span><br><span class="line">    onrestart restart cameraserver</span><br><span class="line">    writepid /dev/cpuset/system-background/tasks</span><br></pre></td></tr></table></figure>
+<h2 id="Zygote"><a href="#Zygote" class="headerlink" title="Zygote"></a>Zygote</h2><p>在上面提到过，触发<code>late-init</code>之后就执行了<code>zygote-start</code>action：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"># It is recommended to put unnecessary data/ initialization from post-fs-data</span><br><span class="line"># to start-zygote in device&apos;s init.rc to unblock zygote start.</span><br><span class="line">on zygote-start &amp;&amp; property:ro.crypto.state=unencrypted</span><br><span class="line">    # A/B update verifier that marks a successful boot.</span><br><span class="line">    exec_start update_verifier_nonencrypted</span><br><span class="line">    start netd</span><br><span class="line">    start zygote</span><br><span class="line">    start zygote_secondary</span><br></pre></td></tr></table></figure>
+<p>看到还有一个条件<code>ro.crypto.state</code>，这个有三个值，上面的代码是其中一个，这个属性是全盘加密，正常启动时没有加密的，但是三个不同值执行的代码其实是一样的。<code>init.{ro.zygote}.rc</code>根据实际情况有四种：</p>
+<ul>
+<li>init.zygote32.rc：zygote 进程对应的执行程序是 app_process (纯 32bit 模式)</li>
+<li>init.zygote64.rc：zygote 进程对应的执行程序是 app_process64 (纯 64bit 模式)</li>
+<li>init.zygote32_64.rc：启动两个 zygote 进程 (名为 zygote 和 zygote_secondary)，对应的执行程序分别是 app_process32 (主模式)、app_process64。</li>
+<li>init.zygote64_32.rc：启动两个 zygote 进程 (名为 zygote 和 zygote_secondary)，对应的执行程序分别是 app_process64 (主模式)、app_process32。</li>
+</ul>
+<p>下面看下<code>init.zygote64_32.rc</code>文件：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line">service zygote /system/bin/app_process64 -Xzygote /system/bin --zygote --start-system-server --socket-name=zygote</span><br><span class="line">    class main</span><br><span class="line">    priority -20</span><br><span class="line">    user root</span><br><span class="line">    group root readproc</span><br><span class="line">    socket zygote stream 660 root system</span><br><span class="line">    onrestart write /sys/android_power/request_state wake</span><br><span class="line">    onrestart write /sys/power/state on</span><br><span class="line">    onrestart restart audioserver</span><br><span class="line">    onrestart restart cameraserver</span><br><span class="line">    onrestart restart media</span><br><span class="line">    onrestart restart netd</span><br><span class="line">    onrestart restart wificond</span><br><span class="line">    writepid /dev/cpuset/foreground/tasks</span><br><span class="line"></span><br><span class="line">service zygote_secondary /system/bin/app_process32 -Xzygote /system/bin --zygote --socket-name=zygote_secondary --enable-lazy-preload</span><br><span class="line">    class main</span><br><span class="line">    priority -20</span><br><span class="line">    user root</span><br><span class="line">    group root readproc</span><br><span class="line">    socket zygote_secondary stream 660 root system</span><br><span class="line">    onrestart restart zygote</span><br><span class="line">    writepid /dev/cpuset/foreground/tasks</span><br></pre></td></tr></table></figure>
+<p>通过与<code>servicemanager</code>对比，可以发现<code>zygote</code>所属用户（组）、class等都是不同的，并且存储路径后面跟有几个参数，以此来启动<code>zygote</code>。</p>
+<h3 id="app-main"><a href="#app-main" class="headerlink" title="app_main"></a>app_main</h3><p>下面找到启动<code>zygote</code>的代码，在<code>/frameworks/base/cmds/app_process/app_main.cpp</code>，看下其<code>main</code>函数：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br><span class="line">101</span><br><span class="line">102</span><br><span class="line">103</span><br><span class="line">104</span><br><span class="line">105</span><br><span class="line">106</span><br><span class="line">107</span><br><span class="line">108</span><br><span class="line">109</span><br><span class="line">110</span><br><span class="line">111</span><br><span class="line">112</span><br><span class="line">113</span><br><span class="line">114</span><br><span class="line">115</span><br><span class="line">116</span><br><span class="line">117</span><br><span class="line">118</span><br><span class="line">119</span><br><span class="line">120</span><br><span class="line">121</span><br><span class="line">122</span><br><span class="line">123</span><br><span class="line">124</span><br><span class="line">125</span><br><span class="line">126</span><br><span class="line">127</span><br><span class="line">128</span><br><span class="line">129</span><br><span class="line">130</span><br><span class="line">131</span><br><span class="line">132</span><br><span class="line">133</span><br><span class="line">134</span><br><span class="line">135</span><br><span class="line">136</span><br><span class="line">137</span><br><span class="line">138</span><br><span class="line">139</span><br><span class="line">140</span><br><span class="line">141</span><br><span class="line">142</span><br><span class="line">143</span><br><span class="line">144</span><br><span class="line">145</span><br><span class="line">146</span><br><span class="line">147</span><br><span class="line">148</span><br><span class="line">149</span><br><span class="line">150</span><br><span class="line">151</span><br><span class="line">152</span><br><span class="line">153</span><br><span class="line">154</span><br><span class="line">155</span><br><span class="line">156</span><br><span class="line">157</span><br><span class="line">158</span><br><span class="line">159</span><br><span class="line">160</span><br><span class="line">161</span><br><span class="line">162</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">int</span> <span class="title">main</span><span class="params">(<span class="keyword">int</span> argc, <span class="keyword">char</span>* <span class="keyword">const</span> argv[])</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    ......</span><br><span class="line">    <span class="comment">// 创建AppRuntime对象</span></span><br><span class="line">    AppRuntime runtime(argv[0], computeArgBlockSize(argc, argv));</span><br><span class="line">    <span class="comment">// Process command line arguments</span></span><br><span class="line">    <span class="comment">// ignore argv[0]</span></span><br><span class="line">    argc--;</span><br><span class="line">    argv++;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 这里是参数解释</span></span><br><span class="line">    <span class="comment">// 第一个参数传给虚拟机</span></span><br><span class="line">    <span class="comment">// Everything up to '--' or first non '-' arg goes to the vm.</span></span><br><span class="line">    <span class="comment">// 后面的/system/bin是执行文件所在目录</span></span><br><span class="line">    <span class="comment">// The first argument after the VM args is the "parent dir", which</span></span><br><span class="line">    <span class="comment">// is currently unused.</span></span><br><span class="line">    <span class="comment">//</span></span><br><span class="line">    <span class="comment">// After the parent dir, we expect one or more the following internal</span></span><br><span class="line">    <span class="comment">// arguments :</span></span><br><span class="line">    <span class="comment">// </span></span><br><span class="line">    <span class="comment">// --zygote : Start in zygote mode 指定ZygoteInit启动</span></span><br><span class="line">    <span class="comment">// --start-system-server : Start the system server. </span></span><br><span class="line">    <span class="comment">// Zygote要启动SystemServer</span></span><br><span class="line">    <span class="comment">// --application : Start in application (stand alone, non zygote) mode.</span></span><br><span class="line">    <span class="comment">// --nice-name : The nice name for this process.</span></span><br><span class="line">    <span class="comment">//</span></span><br><span class="line">    <span class="comment">// For non zygote starts, these arguments will be followed by</span></span><br><span class="line">    <span class="comment">// the main class name. All remaining arguments are passed to</span></span><br><span class="line">    <span class="comment">// the main method of this class.</span></span><br><span class="line">    <span class="comment">// 剩余的参数都会传给Zygote</span></span><br><span class="line">    <span class="comment">// For zygote starts, all remaining arguments are passed to the zygote.</span></span><br><span class="line">    <span class="comment">// main function.</span></span><br><span class="line">    <span class="comment">//</span></span><br><span class="line">    <span class="comment">// Note that we must copy argument string values since we will rewrite the</span></span><br><span class="line">    <span class="comment">// entire argument block when we apply the nice name to argv0.</span></span><br><span class="line">    <span class="comment">//</span></span><br><span class="line">    <span class="comment">// As an exception to the above rule, anything in "spaced commands"</span></span><br><span class="line">    <span class="comment">// goes to the vm even though it has a space in it.</span></span><br><span class="line">    <span class="keyword">const</span> <span class="keyword">char</span>* spaced_commands[] = &#123; <span class="string">"-cp"</span>, <span class="string">"-classpath"</span> &#125;;</span><br><span class="line">    <span class="comment">// Allow "spaced commands" to be succeeded by exactly 1 argument (regardless of -s).</span></span><br><span class="line">    <span class="keyword">bool</span> known_command = <span class="literal">false</span>;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">int</span> i;</span><br><span class="line">    <span class="comment">// 解析参数</span></span><br><span class="line">    <span class="keyword">for</span> (i = <span class="number">0</span>; i &lt; argc; i++) &#123;</span><br><span class="line">        <span class="keyword">if</span> (known_command == <span class="literal">true</span>) &#123;</span><br><span class="line">          runtime.addOption(strdup(argv[i]));</span><br><span class="line">          ALOGV(<span class="string">"app_process main add known option '%s'"</span>, argv[i]);</span><br><span class="line">          known_command = <span class="literal">false</span>;</span><br><span class="line">          <span class="keyword">continue</span>;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">for</span> (<span class="keyword">int</span> j = <span class="number">0</span>;</span><br><span class="line">             j &lt; <span class="keyword">static_cast</span>&lt;<span class="keyword">int</span>&gt;(<span class="keyword">sizeof</span>(spaced_commands) / <span class="keyword">sizeof</span>(spaced_commands[<span class="number">0</span>]));</span><br><span class="line">             ++j) &#123;</span><br><span class="line">          <span class="keyword">if</span> (<span class="built_in">strcmp</span>(argv[i], spaced_commands[j]) == <span class="number">0</span>) &#123;</span><br><span class="line">            known_command = <span class="literal">true</span>;</span><br><span class="line">            ALOGV(<span class="string">"app_process main found known command '%s'"</span>, argv[i]);</span><br><span class="line">          &#125;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span> (argv[i][<span class="number">0</span>] != <span class="string">'-'</span>) &#123;</span><br><span class="line">            <span class="keyword">break</span>;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">if</span> (argv[i][<span class="number">1</span>] == <span class="string">'-'</span> &amp;&amp; argv[i][<span class="number">2</span>] == <span class="number">0</span>) &#123;</span><br><span class="line">            ++i; <span class="comment">// Skip --.</span></span><br><span class="line">            <span class="keyword">break</span>;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        runtime.addOption(strdup(argv[i]));</span><br><span class="line">        ALOGV(<span class="string">"app_process main add option '%s'"</span>, argv[i]);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// Parse runtime arguments.  Stop at first unrecognized option.</span></span><br><span class="line">    <span class="keyword">bool</span> zygote = <span class="literal">false</span>;</span><br><span class="line">    <span class="keyword">bool</span> startSystemServer = <span class="literal">false</span>;</span><br><span class="line">    <span class="keyword">bool</span> application = <span class="literal">false</span>;</span><br><span class="line">    String8 niceName;</span><br><span class="line">    String8 className;</span><br><span class="line"></span><br><span class="line">    ++i;  <span class="comment">// Skip unused "parent dir" argument.</span></span><br><span class="line">    <span class="keyword">while</span> (i &lt; argc) &#123;</span><br><span class="line">        <span class="keyword">const</span> <span class="keyword">char</span>* arg = argv[i++];</span><br><span class="line">        <span class="keyword">if</span> (<span class="built_in">strcmp</span>(arg, <span class="string">"--zygote"</span>) == <span class="number">0</span>) &#123;</span><br><span class="line">            zygote = <span class="literal">true</span>;</span><br><span class="line">            niceName = ZYGOTE_NICE_NAME;</span><br><span class="line">        &#125; <span class="keyword">else</span> <span class="keyword">if</span> (<span class="built_in">strcmp</span>(arg, <span class="string">"--start-system-server"</span>) == <span class="number">0</span>) &#123;</span><br><span class="line">            startSystemServer = <span class="literal">true</span>;</span><br><span class="line">        &#125; <span class="keyword">else</span> <span class="keyword">if</span> (<span class="built_in">strcmp</span>(arg, <span class="string">"--application"</span>) == <span class="number">0</span>) &#123;</span><br><span class="line">            application = <span class="literal">true</span>;</span><br><span class="line">        &#125; <span class="keyword">else</span> <span class="keyword">if</span> (<span class="built_in">strncmp</span>(arg, <span class="string">"--nice-name="</span>, <span class="number">12</span>) == <span class="number">0</span>) &#123;</span><br><span class="line">            niceName.setTo(arg + <span class="number">12</span>);</span><br><span class="line">        &#125; <span class="keyword">else</span> <span class="keyword">if</span> (<span class="built_in">strncmp</span>(arg, <span class="string">"--"</span>, <span class="number">2</span>) != <span class="number">0</span>) &#123;</span><br><span class="line">            className.setTo(arg);</span><br><span class="line">            <span class="keyword">break</span>;</span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">            --i;</span><br><span class="line">            <span class="keyword">break</span>;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    Vector&lt;String8&gt; args;</span><br><span class="line">    <span class="keyword">if</span> (!className.isEmpty()) &#123;</span><br><span class="line">        <span class="comment">// We're not in zygote mode, the only argument we need to pass</span></span><br><span class="line">        <span class="comment">// to RuntimeInit is the application argument.</span></span><br><span class="line">        <span class="comment">//</span></span><br><span class="line">        <span class="comment">// The Remainder of args get passed to startup class main(). Make</span></span><br><span class="line">        <span class="comment">// copies of them before we overwrite them with the process name.</span></span><br><span class="line">        args.add(application ? String8(<span class="string">"application"</span>) : String8(<span class="string">"tool"</span>));</span><br><span class="line">        runtime.setClassNameAndArgs(className, argc - i, argv + i);</span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span> (!LOG_NDEBUG) &#123;</span><br><span class="line">          String8 restOfArgs;</span><br><span class="line">          <span class="keyword">char</span>* <span class="keyword">const</span>* argv_new = argv + i;</span><br><span class="line">          <span class="keyword">int</span> argc_new = argc - i;</span><br><span class="line">          <span class="keyword">for</span> (<span class="keyword">int</span> k = <span class="number">0</span>; k &lt; argc_new; ++k) &#123;</span><br><span class="line">            restOfArgs.append(<span class="string">"\""</span>);</span><br><span class="line">            restOfArgs.append(argv_new[k]);</span><br><span class="line">            restOfArgs.append(<span class="string">"\" "</span>);</span><br><span class="line">          &#125;</span><br><span class="line">          ALOGV(<span class="string">"Class name = %s, args = %s"</span>, className.<span class="built_in">string</span>(), restOfArgs.<span class="built_in">string</span>());</span><br><span class="line">        &#125;</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        <span class="comment">// We're in zygote mode.</span></span><br><span class="line">        maybeCreateDalvikCache();</span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span> (startSystemServer) &#123;</span><br><span class="line">            args.add(String8(<span class="string">"start-system-server"</span>));</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">char</span> prop[PROP_VALUE_MAX];</span><br><span class="line">        <span class="keyword">if</span> (property_get(ABI_LIST_PROPERTY, prop, <span class="literal">NULL</span>) == <span class="number">0</span>) &#123;</span><br><span class="line">            LOG_ALWAYS_FATAL(<span class="string">"app_process: Unable to determine ABI list from property %s."</span>,</span><br><span class="line">                ABI_LIST_PROPERTY);</span><br><span class="line">            <span class="keyword">return</span> <span class="number">11</span>;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="function">String8 <span class="title">abiFlag</span><span class="params">(<span class="string">"--abi-list="</span>)</span></span>;</span><br><span class="line">        abiFlag.append(prop);</span><br><span class="line">        args.add(abiFlag);</span><br><span class="line"></span><br><span class="line">        <span class="comment">// In zygote mode, pass all remaining arguments to the zygote</span></span><br><span class="line">        <span class="comment">// main() method.</span></span><br><span class="line">        <span class="keyword">for</span> (; i &lt; argc; ++i) &#123;</span><br><span class="line">            args.add(String8(argv[i]));</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (!niceName.isEmpty()) &#123;</span><br><span class="line">        runtime.setArgv0(niceName.<span class="built_in">string</span>(), <span class="literal">true</span> <span class="comment">/* setProcName */</span>);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">// 准备启动Zygote</span></span><br><span class="line">    <span class="keyword">if</span> (zygote) &#123;</span><br><span class="line">        runtime.start(<span class="string">"com.android.internal.os.ZygoteInit"</span>, args, zygote);</span><br><span class="line">    &#125; <span class="keyword">else</span> <span class="keyword">if</span> (className) &#123;</span><br><span class="line">        runtime.start(<span class="string">"com.android.internal.os.RuntimeInit"</span>, args, zygote);</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        <span class="built_in">fprintf</span>(<span class="built_in">stderr</span>, <span class="string">"Error: no class name or --zygote supplied.\n"</span>);</span><br><span class="line">        app_usage();</span><br><span class="line">        LOG_ALWAYS_FATAL(<span class="string">"app_process: no class name or --zygote supplied."</span>);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p><code>main</code>函数中，主要是解析传递进来的参数，并初始化<code>AppRuntime</code>对象，该类继承自<code>AndroidRuntime</code>，最后执行<code>AndroidRuntime.start</code>函数。</p>
+<h3 id="AndroidRuntime"><a href="#AndroidRuntime" class="headerlink" title="AndroidRuntime"></a>AndroidRuntime</h3><figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/*</span></span><br><span class="line"><span class="comment"> * Start the Android runtime.  This involves starting the virtual machine</span></span><br><span class="line"><span class="comment"> * and calling the "static void main(String[] args)" method in the class</span></span><br><span class="line"><span class="comment"> * named by "className".</span></span><br><span class="line"><span class="comment"> *</span></span><br><span class="line"><span class="comment"> * Passes the main function two arguments, the class name and the specified</span></span><br><span class="line"><span class="comment"> * options string.</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="keyword">void</span> AndroidRuntime::start(<span class="keyword">const</span> <span class="keyword">char</span>* className, <span class="keyword">const</span> Vector&lt;String8&gt;&amp; options, <span class="keyword">bool</span> zygote)</span><br><span class="line">&#123;</span><br><span class="line">    ......</span><br><span class="line">    <span class="comment">/* start the virtual machine */</span></span><br><span class="line">    JniInvocation jni_invocation;</span><br><span class="line">    jni_invocation.Init(<span class="literal">NULL</span>);</span><br><span class="line">    JNIEnv* env;</span><br><span class="line">    <span class="keyword">if</span> (startVm(&amp;mJavaVM, &amp;env, zygote) != <span class="number">0</span>) &#123;</span><br><span class="line">        <span class="keyword">return</span>;</span><br><span class="line">    &#125;</span><br><span class="line">    onVmCreated(env);</span><br><span class="line"></span><br><span class="line">    <span class="comment">/*</span></span><br><span class="line"><span class="comment">     * Register android functions.</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">if</span> (startReg(env) &lt; <span class="number">0</span>) &#123;</span><br><span class="line">        ALOGE(<span class="string">"Unable to register all android natives\n"</span>);</span><br><span class="line">        <span class="keyword">return</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">/*</span></span><br><span class="line"><span class="comment">     * We want to call main() with a String array with arguments in it.</span></span><br><span class="line"><span class="comment">     * At present we have two arguments, the class name and an option string.</span></span><br><span class="line"><span class="comment">     * Create an array to hold them.</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    jclass stringClass;</span><br><span class="line">    jobjectArray strArray;</span><br><span class="line">    jstring classNameStr;</span><br><span class="line"></span><br><span class="line">    stringClass = env-&gt;FindClass(<span class="string">"java/lang/String"</span>);</span><br><span class="line">    assert(stringClass != <span class="literal">NULL</span>);</span><br><span class="line">    strArray = env-&gt;NewObjectArray(options.size() + <span class="number">1</span>, stringClass, <span class="literal">NULL</span>);</span><br><span class="line">    assert(strArray != <span class="literal">NULL</span>);</span><br><span class="line">    classNameStr = env-&gt;NewStringUTF(className);</span><br><span class="line">    assert(classNameStr != <span class="literal">NULL</span>);</span><br><span class="line">    env-&gt;SetObjectArrayElement(strArray, <span class="number">0</span>, classNameStr);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">for</span> (<span class="keyword">size_t</span> i = <span class="number">0</span>; i &lt; options.size(); ++i) &#123;</span><br><span class="line">        jstring optionsStr = env-&gt;NewStringUTF(options.itemAt(i).<span class="built_in">string</span>());</span><br><span class="line">        assert(optionsStr != <span class="literal">NULL</span>);</span><br><span class="line">        env-&gt;SetObjectArrayElement(strArray, i + <span class="number">1</span>, optionsStr);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">/*</span></span><br><span class="line"><span class="comment">     * Start VM.  This thread becomes the main thread of the VM, and will</span></span><br><span class="line"><span class="comment">     * not return until the VM exits.</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">char</span>* slashClassName = toSlashClassName(className);</span><br><span class="line">    jclass startClass = env-&gt;FindClass(slashClassName);</span><br><span class="line">    <span class="keyword">if</span> (startClass == <span class="literal">NULL</span>) &#123;</span><br><span class="line">        ALOGE(<span class="string">"JavaVM unable to locate class '%s'\n"</span>, slashClassName);</span><br><span class="line">        <span class="comment">/* keep going */</span></span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        jmethodID startMeth = env-&gt;GetStaticMethodID(startClass, <span class="string">"main"</span>,</span><br><span class="line">            <span class="string">"([Ljava/lang/String;)V"</span>);</span><br><span class="line">        <span class="keyword">if</span> (startMeth == <span class="literal">NULL</span>) &#123;</span><br><span class="line">            ALOGE(<span class="string">"JavaVM unable to find main() in '%s'\n"</span>, className);</span><br><span class="line">            <span class="comment">/* keep going */</span></span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">            env-&gt;CallStaticVoidMethod(startClass, startMeth, strArray);</span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="meta-keyword">if</span> 0</span></span><br><span class="line">            <span class="keyword">if</span> (env-&gt;ExceptionCheck())</span><br><span class="line">                threadExitUncaughtException(env);</span><br><span class="line"><span class="meta">#<span class="meta-keyword">endif</span></span></span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="built_in">free</span>(slashClassName);</span><br><span class="line">    ......</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p><code>AndroidRuntime</code>类路径是<code>/frameworks/base/core/jni/AndroidRuntime.cpp</code>，通过<code>start</code>函数的注释就知道该函数的主要作用：</p>
+<ul>
+<li>通过<code>startVm(&amp;mJavaVM, &amp;env, zygote)</code>启动了Dalvik VM；</li>
+<li>通过<code>(startReg(env)</code>注册android本地方法；</li>
+<li>根据参数<code>className</code>获取到<code>ZygoteInit</code>类，然后获取<code>main</code>方法，最后通过<code>env-&gt;CallStaticVoidMethod(startClass, startMeth, strArray);</code>启动<code>ZygoteInit.main</code>方法，并把参数传递过去。</li>
+</ul>
+<h3 id="ZygoteInit"><a href="#ZygoteInit" class="headerlink" title="ZygoteInit"></a>ZygoteInit</h3><p>该类就是来启动<code>zygote</code>进程，启动后<code>zygote</code>进程除了预加载一些类，最主要的就是fork<code>SystemServer</code>进程和其他子进程，其中<code>SystemServer</code>进程主要孕育了大部分系统主要服务。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String argv[])</span> </span>&#123;</span><br><span class="line">    ZygoteServer zygoteServer = <span class="keyword">new</span> ZygoteServer();</span><br><span class="line">    <span class="comment">// Mark zygote start. This ensures that thread creation will throw</span></span><br><span class="line">    <span class="comment">// an error.</span></span><br><span class="line">    <span class="comment">// 不允许在Zygote中创建线程</span></span><br><span class="line">    ZygoteHooks.startZygoteNoThreadCreation();</span><br><span class="line">    <span class="comment">// Zygote goes into its own process group.</span></span><br><span class="line">    <span class="keyword">try</span> &#123;</span><br><span class="line">        Os.setpgid(<span class="number">0</span>, <span class="number">0</span>);</span><br><span class="line">    &#125; <span class="keyword">catch</span> (ErrnoException ex) &#123;</span><br><span class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> RuntimeException(<span class="string">"Failed to setpgid(0,0)"</span>, ex);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">try</span> &#123;</span><br><span class="line">        <span class="comment">// Report Zygote start time to tron unless it is a runtime restart</span></span><br><span class="line">        <span class="keyword">if</span> (!<span class="string">"1"</span>.equals(SystemProperties.get(<span class="string">"sys.boot_completed"</span>))) &#123;</span><br><span class="line">            MetricsLogger.histogram(<span class="keyword">null</span>, <span class="string">"boot_zygote_init"</span>,</span><br><span class="line">                    (<span class="keyword">int</span>) SystemClock.elapsedRealtime());</span><br><span class="line">        &#125;</span><br><span class="line">        String bootTimeTag = Process.is64Bit() ? <span class="string">"Zygote64Timing"</span> : <span class="string">"Zygote32Timing"</span>;</span><br><span class="line">        BootTimingsTraceLog bootTimingsTraceLog = <span class="keyword">new</span> BootTimingsTraceLog(bootTimeTag,</span><br><span class="line">                Trace.TRACE_TAG_DALVIK);</span><br><span class="line">        bootTimingsTraceLog.traceBegin(<span class="string">"ZygoteInit"</span>);</span><br><span class="line">        <span class="comment">// 启动DDMS</span></span><br><span class="line">        RuntimeInit.enableDdms();</span><br><span class="line">        <span class="comment">// Start profiling the zygote initialization.</span></span><br><span class="line">        SamplingProfilerIntegration.start();</span><br><span class="line">        <span class="keyword">boolean</span> startSystemServer = <span class="keyword">false</span>;</span><br><span class="line">        String socketName = <span class="string">"zygote"</span>;</span><br><span class="line">        String abiList = <span class="keyword">null</span>;</span><br><span class="line">        <span class="keyword">boolean</span> enableLazyPreload = <span class="keyword">false</span>;</span><br><span class="line">        <span class="comment">// 解析参数</span></span><br><span class="line">        <span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">1</span>; i &lt; argv.length; i++) &#123;</span><br><span class="line">            <span class="keyword">if</span> (<span class="string">"start-system-server"</span>.equals(argv[i])) &#123;</span><br><span class="line">                startSystemServer = <span class="keyword">true</span>;</span><br><span class="line">            &#125; <span class="keyword">else</span> <span class="keyword">if</span> (<span class="string">"--enable-lazy-preload"</span>.equals(argv[i])) &#123;</span><br><span class="line">                enableLazyPreload = <span class="keyword">true</span>;</span><br><span class="line">            &#125; <span class="keyword">else</span> <span class="keyword">if</span> (argv[i].startsWith(ABI_LIST_ARG)) &#123;</span><br><span class="line">                abiList = argv[i].substring(ABI_LIST_ARG.length());</span><br><span class="line">            &#125; <span class="keyword">else</span> <span class="keyword">if</span> (argv[i].startsWith(SOCKET_NAME_ARG)) &#123;</span><br><span class="line">                socketName = argv[i].substring(SOCKET_NAME_ARG.length());</span><br><span class="line">            &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">                <span class="keyword">throw</span> <span class="keyword">new</span> RuntimeException(<span class="string">"Unknown command line argument: "</span> + argv[i]);</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">if</span> (abiList == <span class="keyword">null</span>) &#123;</span><br><span class="line">            <span class="keyword">throw</span> <span class="keyword">new</span> RuntimeException(<span class="string">"No ABI list supplied."</span>);</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="comment">// 注册socket，名称为zygote，用于进程间通信</span></span><br><span class="line">        zygoteServer.registerServerSocket(socketName);</span><br><span class="line">        <span class="comment">// In some configurations, we avoid preloading resources and classes eagerly.</span></span><br><span class="line">        <span class="comment">// In such cases, we will preload things prior to our first fork.</span></span><br><span class="line">        <span class="keyword">if</span> (!enableLazyPreload) &#123;</span><br><span class="line">            bootTimingsTraceLog.traceBegin(<span class="string">"ZygotePreload"</span>);</span><br><span class="line">            EventLog.writeEvent(LOG_BOOT_PROGRESS_PRELOAD_START,</span><br><span class="line">                SystemClock.uptimeMillis());</span><br><span class="line">            <span class="comment">// 预加载公共类资源，用于fork子程序</span></span><br><span class="line">            preload(bootTimingsTraceLog);</span><br><span class="line">            EventLog.writeEvent(LOG_BOOT_PROGRESS_PRELOAD_END,</span><br><span class="line">                SystemClock.uptimeMillis());</span><br><span class="line">            bootTimingsTraceLog.traceEnd(); <span class="comment">// ZygotePreload</span></span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">            Zygote.resetNicePriority();</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="comment">// Finish profiling the zygote initialization.</span></span><br><span class="line">        SamplingProfilerIntegration.writeZygoteSnapshot();</span><br><span class="line">        <span class="comment">// Do an initial gc to clean up after startup</span></span><br><span class="line">        bootTimingsTraceLog.traceBegin(<span class="string">"PostZygoteInitGC"</span>);</span><br><span class="line">        gcAndFinalize();<span class="comment">// gc操作</span></span><br><span class="line">        bootTimingsTraceLog.traceEnd(); <span class="comment">// PostZygoteInitGC</span></span><br><span class="line">        bootTimingsTraceLog.traceEnd(); <span class="comment">// ZygoteInit</span></span><br><span class="line">        <span class="comment">// Disable tracing so that forked processes do not inherit stale tracing tags fr</span></span><br><span class="line">        <span class="comment">// Zygote.</span></span><br><span class="line">        Trace.setTracingEnabled(<span class="keyword">false</span>);</span><br><span class="line">        <span class="comment">// Zygote process unmounts root storage spaces.</span></span><br><span class="line">        Zygote.nativeUnmountStorageOnInit();</span><br><span class="line">        <span class="comment">// Set seccomp policy</span></span><br><span class="line">        Seccomp.setPolicy();</span><br><span class="line">        <span class="comment">// 关闭不允许创建线程</span></span><br><span class="line">        ZygoteHooks.stopZygoteNoThreadCreation();</span><br><span class="line">        <span class="keyword">if</span> (startSystemServer) &#123;</span><br><span class="line">            <span class="comment">// 启动system server</span></span><br><span class="line">            startSystemServer(abiList, socketName, zygoteServer);</span><br><span class="line">        &#125;</span><br><span class="line">        Log.i(TAG, <span class="string">"Accepting command socket connections"</span>);</span><br><span class="line">        <span class="comment">// 死循环</span></span><br><span class="line">        zygoteServer.runSelectLoop(abiList);</span><br><span class="line">        <span class="comment">// 关闭退出</span></span><br><span class="line">        zygoteServer.closeServerSocket();</span><br><span class="line">    &#125; <span class="keyword">catch</span> (Zygote.MethodAndArgsCaller caller) &#123;</span><br><span class="line">        caller.run();</span><br><span class="line">    &#125; <span class="keyword">catch</span> (Throwable ex) &#123;</span><br><span class="line">        Log.e(TAG, <span class="string">"System zygote died with exception"</span>, ex);</span><br><span class="line">        zygoteServer.closeServerSocket();</span><br><span class="line">        <span class="keyword">throw</span> ex;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h2 id="小结"><a href="#小结" class="headerlink" title="小结"></a>小结</h2><p>到这里，<code>Zygote</code>和<code>ServiceManager</code>的启动过程就结束了，简单梳理下流程。</p>
+<ol>
+<li><p><code>ServiceManager</code>启动：</p>
+<p><code>init</code>进程执行一系列初始化的<code>action</code>，其中<code>late-init</code>之后执行<code>post-fs</code>，然后启动<code>ServiceManager</code>。</p>
+</li>
+<li><p>Zygote启动：</p>
+<p>同样在<code>late-init</code>之后就执行了<code>zygote-start</code>，然后进入启动<code>Zygote</code>的一系列代码。</p>
+<ul>
+<li><code>app_main</code>的<code>main</code>函数中解析参数，传递给<code>AndroidRuntime</code>；</li>
+<li><code>AndroidRuntime.start</code>函数开始启动虚拟机，并调用<code>ZygoteInit.main</code>方法；</li>
+<li>在<code>ZygoteInit.main</code>中，<code>Zygote</code>进程启动，预加载公共类和资源，并首先fork第一个子进程<code>SystemServer</code>。</li>
+</ul>
+</li>
+</ol>
+<p>限于篇幅原因，<code>Zygote</code>进程具体做了什么，就留在后面继续分析。</p>
+
+      
+    </div>
+    
+    
+    
+
+    
+
+    
+
+    
+
+    <footer class="post-footer">
+      
+        <div class="post-tags">
+          
+            <a href="/tags/Android/" rel="tag"># Android</a>
+          
+            <a href="/tags/源码分析/" rel="tag"># 源码分析</a>
+          
+            <a href="/tags/Zygote/" rel="tag"># Zygote</a>
+          
+        </div>
+      
+
+      
+      
+      
+
+      
+        <div class="post-nav">
+          <div class="post-nav-next post-nav-item">
+            
+              <a href="/post/view-draw/" rel="next" title="View绘制流程">
+                <i class="fa fa-chevron-left"></i> View绘制流程
+              </a>
+            
+          </div>
+
+          <span class="post-nav-divider"></span>
+
+          <div class="post-nav-prev post-nav-item">
+            
+              <a href="/post/zygote-analysis/" rel="prev" title="Zygote进程分析">
+                Zygote进程分析 <i class="fa fa-chevron-right"></i>
+              </a>
+            
+          </div>
+        </div>
+      
+
+      
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+
+    <div class="post-spread">
+      
+    </div>
+  </div>
+
+
+          </div>
+          
+
+
+          
+
+  
+
+
+
+        </div>
+        
+          
+  
+  <div class="sidebar-toggle">
+    <div class="sidebar-toggle-line-wrap">
+      <span class="sidebar-toggle-line sidebar-toggle-line-first"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-middle"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-last"></span>
+    </div>
+  </div>
+
+  <aside id="sidebar" class="sidebar">
+    
+    <div class="sidebar-inner">
+
+      
+
+      
+        <ul class="sidebar-nav motion-element">
+          <li class="sidebar-nav-toc sidebar-nav-active" data-target="post-toc-wrap">
+            文章目录
+          </li>
+          <li class="sidebar-nav-overview" data-target="site-overview-wrap">
+            站点概览
+          </li>
+        </ul>
+      
+
+      <section class="site-overview-wrap sidebar-panel">
+        <div class="site-overview">
+          <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+            
+              <p class="site-author-name" itemprop="name">YMlion</p>
+              <p class="site-description motion-element" itemprop="description">业精于勤，荒于嬉；行成于思，毁于随。</p>
+          </div>
+
+          <nav class="site-state motion-element">
+
+            
+              <div class="site-state-item site-state-posts">
+              
+                <a href="/archives/">
+              
+                  <span class="site-state-item-count">10</span>
+                  <span class="site-state-item-name">日志</span>
+                </a>
+              </div>
+            
+
+            
+              
+              
+              <div class="site-state-item site-state-categories">
+                <a href="/categories/index.html">
+                  <span class="site-state-item-count">3</span>
+                  <span class="site-state-item-name">分类</span>
+                </a>
+              </div>
+            
+
+            
+              
+              
+              <div class="site-state-item site-state-tags">
+                <a href="/tags/index.html">
+                  <span class="site-state-item-count">10</span>
+                  <span class="site-state-item-name">标签</span>
+                </a>
+              </div>
+            
+
+          </nav>
+
+          
+            <div class="feed-link motion-element">
+              <a href="/atom.xml" rel="alternate">
+                <i class="fa fa-rss"></i>
+                RSS
+              </a>
+            </div>
+          
+
+          <div class="links-of-author motion-element">
+            
+              
+                <span class="links-of-author-item">
+                  <a href="https://github.com/YMlion" target="_blank" title="GitHub">
+                    
+                      <i class="fa fa-fw fa-github"></i>GitHub</a>
+                </span>
+              
+                <span class="links-of-author-item">
+                  <a href="mailto:lmion.yao@gmail.com" target="_blank" title="E-Mail">
+                    
+                      <i class="fa fa-fw fa-envelope"></i>E-Mail</a>
+                </span>
+              
+            
+          </div>
+
+          
+          
+
+          
+          
+
+          
+
+        </div>
+      </section>
+
+      
+      <!--noindex-->
+        <section class="post-toc-wrap motion-element sidebar-panel sidebar-panel-active">
+          <div class="post-toc">
+
+            
+              
+            
+
+            
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#ServiceManager"><span class="nav-number">1.</span> <span class="nav-text">ServiceManager</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Zygote"><span class="nav-number">2.</span> <span class="nav-text">Zygote</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#app-main"><span class="nav-number">2.1.</span> <span class="nav-text">app_main</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#AndroidRuntime"><span class="nav-number">2.2.</span> <span class="nav-text">AndroidRuntime</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#ZygoteInit"><span class="nav-number">2.3.</span> <span class="nav-text">ZygoteInit</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#小结"><span class="nav-number">3.</span> <span class="nav-text">小结</span></a></li></ol></div>
+            
+
+          </div>
+        </section>
+      <!--/noindex-->
+      
+
+      
+
+    </div>
+  </aside>
+
+
+        
+      </div>
+    </main>
+
+    <footer id="footer" class="footer">
+      <div class="footer-inner">
+        <div class="copyright">&copy; 2015 &mdash; <span itemprop="copyrightYear">2018</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">YMlion</span>
+
+  
+</div>
+
+
+  <div class="powered-by">由 <a class="theme-link" target="_blank" href="https://hexo.io">Hexo</a> 强力驱动</div>
+
+
+
+  <span class="post-meta-divider">|</span>
+
+
+
+  <div class="theme-info">主题 &mdash; <a class="theme-link" target="_blank" href="https://github.com/iissnan/hexo-theme-next">NexT.Pisces</a></div>
+
+
+
+
+        
+<div class="busuanzi-count">
+  <script async src="https://dn-lbstatics.qbox.me/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+  
+    <span class="site-uv">
+      <i class="fa fa-user"></i>
+      <span class="busuanzi-value" id="busuanzi_value_site_uv"></span>
+      
+    </span>
+  
+
+  
+    <span class="site-pv">
+      <i class="fa fa-eye"></i>
+      <span class="busuanzi-value" id="busuanzi_value_site_pv"></span>
+      
+    </span>
+  
+</div>
+
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+
+    
+      <div class="back-to-top">
+        <i class="fa fa-arrow-up"></i>
+        
+      </div>
+    
+
+    
+
+  </div>
+
+  
+
+<script type="text/javascript">
+  if (Object.prototype.toString.call(window.Promise) !== '[object Function]') {
+    window.Promise = null;
+  }
+</script>
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+    <script type="text/javascript" src="/lib/jquery/index.js?v=2.1.3"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/fastclick/lib/fastclick.min.js?v=1.0.6"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/jquery_lazyload/jquery.lazyload.js?v=1.9.7"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/fancybox/source/jquery.fancybox.pack.js?v=2.1.5"></script>
+  
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/utils.js?v=5.1.3"></script>
+
+  <script type="text/javascript" src="/js/src/motion.js?v=5.1.3"></script>
+
+
+
+  
+  
+
+
+  <script type="text/javascript" src="/js/src/affix.js?v=5.1.3"></script>
+
+  <script type="text/javascript" src="/js/src/schemes/pisces.js?v=5.1.3"></script>
+
+
+
+  
+  <script type="text/javascript" src="/js/src/scrollspy.js?v=5.1.3"></script>
+<script type="text/javascript" src="/js/src/post-details.js?v=5.1.3"></script>
+
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/bootstrap.js?v=5.1.3"></script>
+
+
+
+  
+
+
+  
+
+
+
+
+	
+
+
+
+
+
+  
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+
+  
+
+  
+
+  
+
+  
+  
+
+  
+
+  
+
+  
+
+</body>
+</html>

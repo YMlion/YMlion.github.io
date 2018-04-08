@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+
+
+
+  
+
+
+<html class="theme-next pisces use-motion" lang="zh-Hans">
+<head>
+  <meta charset="UTF-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
+<meta name="theme-color" content="#222">
+
+
+
+
+
+
+
+
+
+<meta http-equiv="Cache-Control" content="no-transform" />
+<meta http-equiv="Cache-Control" content="no-siteapp" />
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+  <link href="/lib/fancybox/source/jquery.fancybox.css?v=2.1.5" rel="stylesheet" type="text/css" />
+
+
+
+
+
+
+
+<link href="/lib/font-awesome/css/font-awesome.min.css?v=4.6.2" rel="stylesheet" type="text/css" />
+
+<link href="/css/main.css?v=5.1.3" rel="stylesheet" type="text/css" />
+
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=5.1.3">
+
+
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=5.1.3">
+
+
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=5.1.3">
+
+
+  <link rel="mask-icon" href="/images/logo.svg?v=5.1.3" color="#222">
+
+
+
+
+
+  <meta name="keywords" content="Android,源码分析,插件化,VirtualAPK," />
+
+
+
+
+
+  <link rel="alternate" href="/atom.xml" title="YMlion's Blog" type="application/atom+xml" />
+
+
+
+
+
+
+<meta name="description" content="启动activity是在插件化中是最为复杂的，既有启动模式的多样性，又有生命周期的多变性，更是涉及到资源加载。启动一个插件中的activity，难点在于该activity没有在宿主中注册，直接启动肯定没法找到这个activity。如何解决，需要对activity启动流程比较熟悉。activity启动流程过于复杂，涉及类">
+<meta name="keywords" content="Android,源码分析,插件化,VirtualAPK">
+<meta property="og:type" content="article">
+<meta property="og:title" content="VirtualAPK原理分析之Activity启动">
+<meta property="og:url" content="https://ymlion.com/post/virtualapk-analysis-2/index.html">
+<meta property="og:site_name" content="YMlion&#39;s Blog">
+<meta property="og:description" content="启动activity是在插件化中是最为复杂的，既有启动模式的多样性，又有生命周期的多变性，更是涉及到资源加载。启动一个插件中的activity，难点在于该activity没有在宿主中注册，直接启动肯定没法找到这个activity。如何解决，需要对activity启动流程比较熟悉。activity启动流程过于复杂，涉及类也众多，但主要需要关注的有Activity、Instrumentation、AM">
+<meta property="og:locale" content="zh-Hans">
+<meta property="og:updated_time" content="2018-04-08T03:49:50.106Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="VirtualAPK原理分析之Activity启动">
+<meta name="twitter:description" content="启动activity是在插件化中是最为复杂的，既有启动模式的多样性，又有生命周期的多变性，更是涉及到资源加载。启动一个插件中的activity，难点在于该activity没有在宿主中注册，直接启动肯定没法找到这个activity。如何解决，需要对activity启动流程比较熟悉。activity启动流程过于复杂，涉及类也众多，但主要需要关注的有Activity、Instrumentation、AM">
+
+
+
+<script type="text/javascript" id="hexo.configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Pisces',
+    version: '5.1.3',
+    sidebar: {"position":"left","display":"post","offset":12,"b2t":false,"scrollpercent":false,"onmobile":false},
+    fancybox: true,
+    tabs: true,
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    duoshuo: {
+      userId: '0',
+      author: '博主'
+    },
+    algolia: {
+      applicationID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    }
+  };
+</script>
+
+
+
+  <link rel="canonical" href="https://ymlion.com/post/virtualapk-analysis-2/"/>
+
+
+
+
+
+  <title>VirtualAPK原理分析之Activity启动 | YMlion's Blog</title>
+  
+
+
+
+
+
+  <script type="text/javascript">
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?93ccb82075a783cf82b4e98bec7097e3";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" lang="zh-Hans">
+
+  
+  
+    
+  
+
+  <div class="container sidebar-position-left page-post-detail">
+    <div class="headband"></div>
+
+    <header id="header" class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-wrapper">
+  <div class="site-meta ">
+    
+
+    <div class="custom-logo-site-title">
+      <a href="/"  class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">YMlion's Blog</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+      
+        <p class="site-subtitle">写点什么</p>
+      
+  </div>
+
+  <div class="site-nav-toggle">
+    <button>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+    </button>
+  </div>
+</div>
+
+<nav class="site-nav">
+  
+
+  
+    <ul id="menu" class="menu">
+      
+        
+        <li class="menu-item menu-item-home">
+          <a href="/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-home"></i> <br />
+            
+            首页
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-tags">
+          <a href="/tags/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-tags"></i> <br />
+            
+            标签
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-categories">
+          <a href="/categories/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-th"></i> <br />
+            
+            分类
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-archives">
+          <a href="/archives/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-archive"></i> <br />
+            
+            归档
+          </a>
+        </li>
+      
+
+      
+    </ul>
+  
+
+  
+</nav>
+
+
+
+ </div>
+    </header>
+
+    <main id="main" class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          <div id="content" class="content">
+            
+
+  <div id="posts" class="posts-expand">
+    
+
+  
+
+  
+  
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="https://ymlion.com/post/virtualapk-analysis-2/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="YMlion">
+      <meta itemprop="description" content="">
+      <meta itemprop="image" content="/images/avatar.gif">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="YMlion's Blog">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">VirtualAPK原理分析之Activity启动</h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">发表于</span>
+              
+              <time title="创建于" itemprop="dateCreated datePublished" datetime="2018-03-15T12:20:01+08:00">
+                2018-03-15
+              </time>
+            
+
+            
+
+            
+          </span>
+
+          
+            <span class="post-category" >
+            
+              <span class="post-meta-divider">|</span>
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">分类于</span>
+              
+              
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Android/" itemprop="url" rel="index">
+                    <span itemprop="name">Android</span>
+                  </a>
+                </span>
+
+                
+                
+                  ， 
+                
+              
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Android/插件化/" itemprop="url" rel="index">
+                    <span itemprop="name">插件化</span>
+                  </a>
+                </span>
+
+                
+                
+              
+            </span>
+          
+
+          
+            
+          
+
+          
+          
+
+          
+            <span class="post-meta-divider">|</span>
+            <span class="page-pv"><i class="fa fa-file-o"></i>
+            <span class="busuanzi-value" id="busuanzi_value_page_pv" ></span>
+            </span>
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        <p>启动activity是在插件化中是最为复杂的，既有启动模式的多样性，又有生命周期的多变性，更是涉及到资源加载。启动一个插件中的activity，难点在于该activity没有在宿主中注册，直接启动肯定没法找到这个activity。如何解决，需要对activity启动流程比较熟悉。activity启动流程过于复杂，涉及类也众多，但主要需要关注的有<code>Activity</code>、<code>Instrumentation</code>、<code>AMS</code>、<code>ActivityThread</code>这4个类。</p>
+<a id="more"></a>
+<p>插件化中通常的解决方法就是在宿主中预注册多个不同启动模式的activity，在启动流程中的某个阶段将要启动的目标activity替换成对应的预注册过的activity，使得流程继续下去，但在最后要创建activity之前再替换为目标activity，并用自定义的<code>DexClassLoader</code>实例去加载目标activity，最终启动的是目标activity。就用一个偷梁换柱，骗过系统，最终实现activity启动，也算是巧妙。下面看下<a href="https://github.com/didi/VirtualAPK" target="_blank" rel="noopener">VirtualAPK</a>中是如何实现的偷梁换柱。</p>
+<h2 id="activity预注册"><a href="#activity预注册" class="headerlink" title="activity预注册"></a>activity预注册</h2><p><a href="https://github.com/didi/VirtualAPK" target="_blank" rel="noopener">VirtualAPK</a>的文档中说过不用在宿主中预注册activity，那上面的方法就没法实现，但实际是怎样的呢？我们在<code>CoreLibrary</code>中看到了一个文件<a href="https://github.com/didi/VirtualAPK/blob/master/CoreLibrary/src/main/AndroidManifest.xml" target="_blank" rel="noopener">AndroidManifest.xml</a>，在里面揭示了真相：</p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">activity</span> <span class="attr">android:name</span>=<span class="string">".A$1"</span> <span class="attr">android:launchMode</span>=<span class="string">"standard"</span>/&gt;</span></span><br><span class="line"><span class="tag">&lt;<span class="name">activity</span> <span class="attr">android:name</span>=<span class="string">".A$2"</span> <span class="attr">android:launchMode</span>=<span class="string">"standard"</span></span></span><br><span class="line"><span class="tag">    <span class="attr">android:theme</span>=<span class="string">"@android:style/Theme.Translucent"</span> /&gt;</span></span><br><span class="line"><span class="comment">&lt;!-- Stub Activities --&gt;</span></span><br><span class="line"><span class="tag">&lt;<span class="name">activity</span> <span class="attr">android:name</span>=<span class="string">".B$1"</span> <span class="attr">android:launchMode</span>=<span class="string">"singleTop"</span>/&gt;</span></span><br><span class="line"><span class="comment">&lt;!-- Stub Activities --&gt;</span></span><br><span class="line"><span class="tag">&lt;<span class="name">activity</span> <span class="attr">android:name</span>=<span class="string">".C$1"</span> <span class="attr">android:launchMode</span>=<span class="string">"singleTask"</span>/&gt;</span></span><br><span class="line"><span class="comment">&lt;!-- Stub Activities --&gt;</span></span><br><span class="line"><span class="tag">&lt;<span class="name">activity</span> <span class="attr">android:name</span>=<span class="string">".D$1"</span> <span class="attr">android:launchMode</span>=<span class="string">"singleInstance"</span>/&gt;</span></span><br></pre></td></tr></table></figure>
+<p>每个启动模式都有很多个预注册的activity，上面省略了大部分，<a href="https://github.com/didi/VirtualAPK" target="_blank" rel="noopener">VirtualAPK</a>提前已经预注册过了，这样处理相对于在宿主中注册更加方便了，不用用户考虑预注册多少activity的问题了。</p>
+<h2 id="偷梁换柱之骗过系统"><a href="#偷梁换柱之骗过系统" class="headerlink" title="偷梁换柱之骗过系统"></a>偷梁换柱之骗过系统</h2><p>使用预注册的activity骗过系统这一步，在activity启动流程中有不止一处可以实现，<a href="https://github.com/didi/VirtualAPK" target="_blank" rel="noopener">VirtualAPK</a>中涉及了其中两处。在上一篇加载分析中，第二步就是为此做准备的：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// hook掉ActivityThread中的mInstrumentation和为mH添加Callback</span></span><br><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">void</span> <span class="title">hookInstrumentationAndHandler</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="keyword">try</span> &#123;</span><br><span class="line">        Instrumentation baseInstrumentation = ReflectUtil.getInstrumentation(<span class="keyword">this</span>.mContext);</span><br><span class="line">        <span class="keyword">if</span> (baseInstrumentation.getClass().getName().contains(<span class="string">"lbe"</span>)) &#123;</span><br><span class="line">            <span class="comment">// reject executing in paralell space, for example, lbe.</span></span><br><span class="line">            System.exit(<span class="number">0</span>);</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">final</span> VAInstrumentation instrumentation = <span class="keyword">new</span> VAInstrumentation(<span class="keyword">this</span>, baseInstrumentation);</span><br><span class="line">        Object activityThread = ReflectUtil.getActivityThread(<span class="keyword">this</span>.mContext);</span><br><span class="line">        ReflectUtil.setInstrumentation(activityThread, instrumentation);</span><br><span class="line">        ReflectUtil.setHandlerCallback(<span class="keyword">this</span>.mContext, instrumentation);</span><br><span class="line">        <span class="keyword">this</span>.mInstrumentation = instrumentation;</span><br><span class="line">    &#125; <span class="keyword">catch</span> (Exception e) &#123;</span><br><span class="line">        e.printStackTrace();</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p><code>Instrumentation</code>类和activity的创建、整个生命周期回调都是在该类中执行的，<code>startActivity</code>会执行该类的<code>execStartActivity</code>方法，所以该方法是一个很好替换为预注册activity的好地方，<code>VAInstrumentation</code>中重写了该方法：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> ActivityResult <span class="title">execStartActivity</span><span class="params">(</span></span></span><br><span class="line"><span class="function"><span class="params">        Context who, IBinder contextThread, IBinder token, Activity target,</span></span></span><br><span class="line"><span class="function"><span class="params">        Intent intent, <span class="keyword">int</span> requestCode, Bundle options)</span> </span>&#123;</span><br><span class="line">    <span class="comment">// 这一步是找到真正正确的intent中ComponentName实例，因为原来的包名可能不对</span></span><br><span class="line">    mPluginManager.getComponentsHandler().transformIntentToExplicitAsNeeded(intent);<span class="comment">// ①</span></span><br><span class="line">    <span class="comment">// null component is an implicitly intent</span></span><br><span class="line">    <span class="keyword">if</span> (intent.getComponent() != <span class="keyword">null</span>) &#123;</span><br><span class="line">        Log.i(TAG, String.format(<span class="string">"execStartActivity[%s : %s]"</span>, intent.getComponent().getPackageName(),</span><br><span class="line">                intent.getComponent().getClassName()));</span><br><span class="line">        <span class="comment">// resolve intent with Stub Activity if needed</span></span><br><span class="line">        <span class="keyword">this</span>.mPluginManager.getComponentsHandler().markIntentIfNeeded(intent); <span class="comment">// ②</span></span><br><span class="line">    &#125;</span><br><span class="line">    ActivityResult result = realExecStartActivity(who, contextThread, token, target,</span><br><span class="line">                intent, requestCode, options); <span class="comment">// ③</span></span><br><span class="line">    <span class="keyword">return</span> result;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>该方法有多个重载方法，这里的目的都是一样的，替换intent中的activity对应的包名和类名。如果是插件中的activity，第①步保证了包名和类名的正确性。第②步是执行替换操作：将目标activity包名和类名保存到intent的<code>Bundle</code>对象中，并找到目标activity对应的<code>ActivityInfo</code>，根据启动模式和主题去匹配预注册的activity，最后替换为预注册的某个activity。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">markIntentIfNeeded</span><span class="params">(Intent intent)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">if</span> (intent.getComponent() == <span class="keyword">null</span>) &#123;</span><br><span class="line">        <span class="keyword">return</span>;</span><br><span class="line">    &#125;</span><br><span class="line">    String targetPackageName = intent.getComponent().getPackageName();</span><br><span class="line">    String targetClassName = intent.getComponent().getClassName();</span><br><span class="line">    <span class="comment">// search map and return specific launchmode stub activity</span></span><br><span class="line">    <span class="keyword">if</span> (!targetPackageName.equals(mContext.getPackageName()) &amp;&amp; mPluginManager.getLoadedPlugin(targetPackageName) != <span class="keyword">null</span>) &#123;<span class="comment">// 保存目标activity</span></span><br><span class="line">        intent.putExtra(Constants.KEY_IS_PLUGIN, <span class="keyword">true</span>);</span><br><span class="line">        intent.putExtra(Constants.KEY_TARGET_PACKAGE, targetPackageName);</span><br><span class="line">        intent.putExtra(Constants.KEY_TARGET_ACTIVITY, targetClassName);</span><br><span class="line">        dispatchStubActivity(intent);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">void</span> <span class="title">dispatchStubActivity</span><span class="params">(Intent intent)</span> </span>&#123;</span><br><span class="line">    ComponentName component = intent.getComponent();</span><br><span class="line">    String targetClassName = intent.getComponent().getClassName();</span><br><span class="line">    LoadedPlugin loadedPlugin = mPluginManager.getLoadedPlugin(intent);</span><br><span class="line">    ActivityInfo info = loadedPlugin.getActivityInfo(component);<span class="comment">// 找到目标activity对应的ActivityInfo</span></span><br><span class="line">    <span class="keyword">if</span> (info == <span class="keyword">null</span>) &#123;</span><br><span class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> RuntimeException(<span class="string">"can not find "</span> + component);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">int</span> launchMode = info.launchMode;</span><br><span class="line">    Resources.Theme themeObj = loadedPlugin.getResources().newTheme();</span><br><span class="line">    themeObj.applyStyle(info.theme, <span class="keyword">true</span>);</span><br><span class="line">    <span class="comment">// 根据启动模式和主题去匹配预注册的activity</span></span><br><span class="line">    String stubActivity = mStubActivityInfo.getStubActivity(targetClassName, launchMode, themeObj);</span><br><span class="line">    Log.i(TAG, String.format(<span class="string">"dispatchStubActivity,[%s -&gt; %s]"</span>, targetClassName, stubActivity));</span><br><span class="line">    intent.setClassName(mContext, stubActivity); <span class="comment">// 设置预注册activity包名和类名</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>第③步是反射<code>execStartActivity</code>方法，因为该方法是隐藏的，只对系统可见，所以必须反射才能执行原始<code>Instrumentation</code>对象<code>mBase</code>中的该方法。到此为止，已经骗过系统，让系统去找预注册的activity，而非目标activity，下一步就是在activity创建之前再替换回目标activity。</p>
+<h2 id="偷梁换柱之实现目标"><a href="#偷梁换柱之实现目标" class="headerlink" title="偷梁换柱之实现目标"></a>偷梁换柱之实现目标</h2><p>前面说过<code>Instrumentation</code>中执行activity的创建，主要就是加载目标activity类，对应的方法就是<code>newActivity</code>。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Override</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> Activity <span class="title">newActivity</span><span class="params">(ClassLoader cl, String className, Intent intent)</span> <span class="keyword">throws</span> InstantiationException, IllegalAccessException, ClassNotFoundException </span>&#123;</span><br><span class="line">    <span class="keyword">try</span> &#123;</span><br><span class="line">        cl.loadClass(className);</span><br><span class="line">    &#125; <span class="keyword">catch</span> (ClassNotFoundException e) &#123;</span><br><span class="line">        LoadedPlugin plugin = <span class="keyword">this</span>.mPluginManager.getLoadedPlugin(intent);</span><br><span class="line">        String targetClassName = PluginUtil.getTargetActivity(intent);</span><br><span class="line">        Log.i(TAG, String.format(<span class="string">"newActivity[%s : %s]"</span>, className, targetClassName));</span><br><span class="line">        <span class="keyword">if</span> (targetClassName != <span class="keyword">null</span>) &#123;</span><br><span class="line">            Activity activity = mBase.newActivity(plugin.getClassLoader(), targetClassName, intent);</span><br><span class="line">            activity.setIntent(intent);</span><br><span class="line">            <span class="keyword">try</span> &#123;</span><br><span class="line">                <span class="comment">// for 4.1+</span></span><br><span class="line">                ReflectUtil.setField(ContextThemeWrapper.class, activity, <span class="string">"mResources"</span>, plugin.getResources());</span><br><span class="line">            &#125; <span class="keyword">catch</span> (Exception ignored) &#123;</span><br><span class="line">                <span class="comment">// ignored.</span></span><br><span class="line">            &#125;</span><br><span class="line">            <span class="keyword">return</span> activity;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> mBase.newActivity(cl, className, intent);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>如果是插件中的activity，则会捕获异常，然后使用插件中的<code>DexClassLoader</code>去加载目标activity类，创建了activity之后，再次设置上一篇初始化时就保存好的插件的<code>Resources</code>对象，因为<code>ContextThemeWrapper</code>是<code>Activity</code>的父类，<code>getResources</code>方法在<code>ContextThemeWrapper</code>中有重写，而该方法就是返回<code>mResources</code>，这里设置了，在activity创建之后用到的时候获取的就是插件中的<code>Resources</code>对象。</p>
+<p>这样，目标activity就创建成功了，但该activity还有些变量需要修改。activity创建成功之后，会执行<code>activity.attach</code>方法初始化activity所相关的各种信息，像activity信息、window信息等等，其中有几个重要的在加载插件就初始化的变量需要重新设置。activity初始化之后，就会进入activity生命周期，而相关的方法还是在<code>Instrumentation</code>中。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Override</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">callActivityOnCreate</span><span class="params">(Activity activity, Bundle icicle)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">final</span> Intent intent = activity.getIntent();</span><br><span class="line">    <span class="keyword">if</span> (PluginUtil.isIntentFromPlugin(intent)) &#123;</span><br><span class="line">        Context base = activity.getBaseContext();</span><br><span class="line">        <span class="keyword">try</span> &#123;</span><br><span class="line">            LoadedPlugin plugin = <span class="keyword">this</span>.mPluginManager.getLoadedPlugin(intent);</span><br><span class="line">            ReflectUtil.setField(base.getClass(), base, <span class="string">"mResources"</span>, plugin.getResources());</span><br><span class="line">            ReflectUtil.setField(ContextWrapper.class, activity, <span class="string">"mBase"</span>, plugin.getPluginContext());</span><br><span class="line">            ReflectUtil.setField(Activity.class, activity, <span class="string">"mApplication"</span>, plugin.getApplication());</span><br><span class="line">            ReflectUtil.setFieldNoException(ContextThemeWrapper.class, activity, <span class="string">"mBase"</span>, plugin.getPluginContext());</span><br><span class="line">            <span class="comment">// set screenOrientation</span></span><br><span class="line">            ActivityInfo activityInfo = plugin.getActivityInfo(PluginUtil.getComponent(intent));</span><br><span class="line">            <span class="keyword">if</span> (activityInfo.screenOrientation != ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED) &#123;</span><br><span class="line">                activity.setRequestedOrientation(activityInfo.screenOrientation);</span><br><span class="line">            &#125;</span><br><span class="line">        &#125; <span class="keyword">catch</span> (Exception e) &#123;</span><br><span class="line">            e.printStackTrace();</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    mBase.callActivityOnCreate(activity, icicle);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p><code>callActivityOnCreate</code>方法就是去回调<code>activity</code>的<code>OnCreate</code>方法，因此重写该方法设置必要的变量是一个首选的位置。主要设置了activity的三个变量，<code>mResources</code>、<code>mBase</code>、<code>mApplication</code>，<a href="https://github.com/didi/VirtualAPK" target="_blank" rel="noopener">VirtualAPK</a>中自定义了一个<code>ContextWrapper</code>类，并重写了其中几个比较重要的方法，返回<code>LoadedPlugin</code>中提前定义好的变量。到此为止，整个activity启动过程就完美结束了。</p>
+<h2 id="小结"><a href="#小结" class="headerlink" title="小结"></a>小结</h2><p>插件中activity启动需要熟悉activity启动流程，在里面找到合适的位置去“偷梁换柱”，<a href="https://github.com/didi/VirtualAPK" target="_blank" rel="noopener">VirtualAPK</a>的实现算是比较简洁的，基本上所有的替换工作都是在<code>Instrumentation</code>中进行，未涉及到<code>AMS</code>的hook，这也就出现了不同的插件化实现方法。除了上面分析的，<a href="https://github.com/didi/VirtualAPK" target="_blank" rel="noopener">VirtualAPK</a>中还自定义实现了几个比较重要的类，以及上一篇<a href="https://ymlion.com/post/virtualapk-analysis-1/">加载</a>中所提前做的准备，整个的这些才是实现的全部。</p>
+<blockquote>
+<p>本篇文章基于<a href="https://github.com/didi/VirtualAPK" target="_blank" rel="noopener">VirtualAPK</a> 0.9.3版本</p>
+</blockquote>
+
+      
+    </div>
+    
+    
+    
+
+    
+
+    
+
+    
+
+    <footer class="post-footer">
+      
+        <div class="post-tags">
+          
+            <a href="/tags/Android/" rel="tag"># Android</a>
+          
+            <a href="/tags/源码分析/" rel="tag"># 源码分析</a>
+          
+            <a href="/tags/插件化/" rel="tag"># 插件化</a>
+          
+            <a href="/tags/VirtualAPK/" rel="tag"># VirtualAPK</a>
+          
+        </div>
+      
+
+      
+      
+      
+
+      
+        <div class="post-nav">
+          <div class="post-nav-next post-nav-item">
+            
+              <a href="/post/android-classloader/" rel="next" title="Android ClassLoader分析">
+                <i class="fa fa-chevron-left"></i> Android ClassLoader分析
+              </a>
+            
+          </div>
+
+          <span class="post-nav-divider"></span>
+
+          <div class="post-nav-prev post-nav-item">
+            
+              <a href="/post/virtualapk-analysis-service/" rel="prev" title="VirtualAPK原理分析之Service启动">
+                VirtualAPK原理分析之Service启动 <i class="fa fa-chevron-right"></i>
+              </a>
+            
+          </div>
+        </div>
+      
+
+      
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+
+    <div class="post-spread">
+      
+    </div>
+  </div>
+
+
+          </div>
+          
+
+
+          
+
+  
+
+
+
+        </div>
+        
+          
+  
+  <div class="sidebar-toggle">
+    <div class="sidebar-toggle-line-wrap">
+      <span class="sidebar-toggle-line sidebar-toggle-line-first"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-middle"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-last"></span>
+    </div>
+  </div>
+
+  <aside id="sidebar" class="sidebar">
+    
+    <div class="sidebar-inner">
+
+      
+
+      
+        <ul class="sidebar-nav motion-element">
+          <li class="sidebar-nav-toc sidebar-nav-active" data-target="post-toc-wrap">
+            文章目录
+          </li>
+          <li class="sidebar-nav-overview" data-target="site-overview-wrap">
+            站点概览
+          </li>
+        </ul>
+      
+
+      <section class="site-overview-wrap sidebar-panel">
+        <div class="site-overview">
+          <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+            
+              <p class="site-author-name" itemprop="name">YMlion</p>
+              <p class="site-description motion-element" itemprop="description">业精于勤，荒于嬉；行成于思，毁于随。</p>
+          </div>
+
+          <nav class="site-state motion-element">
+
+            
+              <div class="site-state-item site-state-posts">
+              
+                <a href="/archives/">
+              
+                  <span class="site-state-item-count">10</span>
+                  <span class="site-state-item-name">日志</span>
+                </a>
+              </div>
+            
+
+            
+              
+              
+              <div class="site-state-item site-state-categories">
+                <a href="/categories/index.html">
+                  <span class="site-state-item-count">3</span>
+                  <span class="site-state-item-name">分类</span>
+                </a>
+              </div>
+            
+
+            
+              
+              
+              <div class="site-state-item site-state-tags">
+                <a href="/tags/index.html">
+                  <span class="site-state-item-count">10</span>
+                  <span class="site-state-item-name">标签</span>
+                </a>
+              </div>
+            
+
+          </nav>
+
+          
+            <div class="feed-link motion-element">
+              <a href="/atom.xml" rel="alternate">
+                <i class="fa fa-rss"></i>
+                RSS
+              </a>
+            </div>
+          
+
+          <div class="links-of-author motion-element">
+            
+              
+                <span class="links-of-author-item">
+                  <a href="https://github.com/YMlion" target="_blank" title="GitHub">
+                    
+                      <i class="fa fa-fw fa-github"></i>GitHub</a>
+                </span>
+              
+                <span class="links-of-author-item">
+                  <a href="mailto:lmion.yao@gmail.com" target="_blank" title="E-Mail">
+                    
+                      <i class="fa fa-fw fa-envelope"></i>E-Mail</a>
+                </span>
+              
+            
+          </div>
+
+          
+          
+
+          
+          
+
+          
+
+        </div>
+      </section>
+
+      
+      <!--noindex-->
+        <section class="post-toc-wrap motion-element sidebar-panel sidebar-panel-active">
+          <div class="post-toc">
+
+            
+              
+            
+
+            
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#activity预注册"><span class="nav-number">1.</span> <span class="nav-text">activity预注册</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#偷梁换柱之骗过系统"><span class="nav-number">2.</span> <span class="nav-text">偷梁换柱之骗过系统</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#偷梁换柱之实现目标"><span class="nav-number">3.</span> <span class="nav-text">偷梁换柱之实现目标</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#小结"><span class="nav-number">4.</span> <span class="nav-text">小结</span></a></li></ol></div>
+            
+
+          </div>
+        </section>
+      <!--/noindex-->
+      
+
+      
+
+    </div>
+  </aside>
+
+
+        
+      </div>
+    </main>
+
+    <footer id="footer" class="footer">
+      <div class="footer-inner">
+        <div class="copyright">&copy; 2015 &mdash; <span itemprop="copyrightYear">2018</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">YMlion</span>
+
+  
+</div>
+
+
+  <div class="powered-by">由 <a class="theme-link" target="_blank" href="https://hexo.io">Hexo</a> 强力驱动</div>
+
+
+
+  <span class="post-meta-divider">|</span>
+
+
+
+  <div class="theme-info">主题 &mdash; <a class="theme-link" target="_blank" href="https://github.com/iissnan/hexo-theme-next">NexT.Pisces</a></div>
+
+
+
+
+        
+<div class="busuanzi-count">
+  <script async src="https://dn-lbstatics.qbox.me/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+  
+    <span class="site-uv">
+      <i class="fa fa-user"></i>
+      <span class="busuanzi-value" id="busuanzi_value_site_uv"></span>
+      
+    </span>
+  
+
+  
+    <span class="site-pv">
+      <i class="fa fa-eye"></i>
+      <span class="busuanzi-value" id="busuanzi_value_site_pv"></span>
+      
+    </span>
+  
+</div>
+
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+
+    
+      <div class="back-to-top">
+        <i class="fa fa-arrow-up"></i>
+        
+      </div>
+    
+
+    
+
+  </div>
+
+  
+
+<script type="text/javascript">
+  if (Object.prototype.toString.call(window.Promise) !== '[object Function]') {
+    window.Promise = null;
+  }
+</script>
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+    <script type="text/javascript" src="/lib/jquery/index.js?v=2.1.3"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/fastclick/lib/fastclick.min.js?v=1.0.6"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/jquery_lazyload/jquery.lazyload.js?v=1.9.7"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/fancybox/source/jquery.fancybox.pack.js?v=2.1.5"></script>
+  
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/utils.js?v=5.1.3"></script>
+
+  <script type="text/javascript" src="/js/src/motion.js?v=5.1.3"></script>
+
+
+
+  
+  
+
+
+  <script type="text/javascript" src="/js/src/affix.js?v=5.1.3"></script>
+
+  <script type="text/javascript" src="/js/src/schemes/pisces.js?v=5.1.3"></script>
+
+
+
+  
+  <script type="text/javascript" src="/js/src/scrollspy.js?v=5.1.3"></script>
+<script type="text/javascript" src="/js/src/post-details.js?v=5.1.3"></script>
+
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/bootstrap.js?v=5.1.3"></script>
+
+
+
+  
+
+
+  
+
+
+
+
+	
+
+
+
+
+
+  
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+
+  
+
+  
+
+  
+
+  
+  
+
+  
+
+  
+
+  
+
+</body>
+</html>
