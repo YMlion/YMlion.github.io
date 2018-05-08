@@ -1,0 +1,882 @@
+<!DOCTYPE html>
+
+
+
+  
+
+
+<html class="theme-next pisces use-motion" lang="zh-Hans">
+<head>
+  <meta charset="UTF-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
+<meta name="theme-color" content="#222">
+
+
+
+
+
+
+
+
+
+<meta http-equiv="Cache-Control" content="no-transform" />
+<meta http-equiv="Cache-Control" content="no-siteapp" />
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+  <link href="/lib/fancybox/source/jquery.fancybox.css?v=2.1.5" rel="stylesheet" type="text/css" />
+
+
+
+
+
+
+
+<link href="/lib/font-awesome/css/font-awesome.min.css?v=4.6.2" rel="stylesheet" type="text/css" />
+
+<link href="/css/main.css?v=5.1.3" rel="stylesheet" type="text/css" />
+
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=5.1.3">
+
+
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=5.1.3">
+
+
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=5.1.3">
+
+
+  <link rel="mask-icon" href="/images/logo.svg?v=5.1.3" color="#222">
+
+
+
+
+
+  <meta name="keywords" content="Android,插件化,资源打包," />
+
+
+
+
+
+  <link rel="alternate" href="/atom.xml" title="YMlion's Blog" type="application/atom+xml" />
+
+
+
+
+
+
+<meta name="description" content="Android插件化实现过程中，同一进程下插件和宿主资源共享和冲突问题像一座山挡住了路，无法避开。在Android中，所有资源都是通过资源id进行引用，因此，要越过这座山，简单可行的解决方法就是修改资源id。资源id是一个int值，四字节，格式是0xPPTTEEEE：  PP：package id，第一个字节，范围在[">
+<meta name="keywords" content="Android,插件化,资源打包">
+<meta property="og:type" content="article">
+<meta property="og:title" content="resources.arsc解析">
+<meta property="og:url" content="https://ymlion.com/post/resources-arsc-parse/index.html">
+<meta property="og:site_name" content="YMlion&#39;s Blog">
+<meta property="og:description" content="Android插件化实现过程中，同一进程下插件和宿主资源共享和冲突问题像一座山挡住了路，无法避开。在Android中，所有资源都是通过资源id进行引用，因此，要越过这座山，简单可行的解决方法就是修改资源id。资源id是一个int值，四字节，格式是0xPPTTEEEE：  PP：package id，第一个字节，范围在[0x01, 0x7f]，系统应用为0x01，第三方应用为0x7f； TT：typ">
+<meta property="og:locale" content="zh-Hans">
+<meta property="og:image" content="https://ymlion.com/post/resources-arsc-parse/resources_arsc_detail.png">
+<meta property="og:image" content="https://ymlion.com/post/resources-arsc-parse/resources_arsc.png">
+<meta property="og:updated_time" content="2018-05-08T09:00:01.982Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="resources.arsc解析">
+<meta name="twitter:description" content="Android插件化实现过程中，同一进程下插件和宿主资源共享和冲突问题像一座山挡住了路，无法避开。在Android中，所有资源都是通过资源id进行引用，因此，要越过这座山，简单可行的解决方法就是修改资源id。资源id是一个int值，四字节，格式是0xPPTTEEEE：  PP：package id，第一个字节，范围在[0x01, 0x7f]，系统应用为0x01，第三方应用为0x7f； TT：typ">
+<meta name="twitter:image" content="https://ymlion.com/post/resources-arsc-parse/resources_arsc_detail.png">
+
+
+
+<script type="text/javascript" id="hexo.configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Pisces',
+    version: '5.1.3',
+    sidebar: {"position":"left","display":"post","offset":12,"b2t":false,"scrollpercent":false,"onmobile":false},
+    fancybox: true,
+    tabs: true,
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    duoshuo: {
+      userId: '0',
+      author: '博主'
+    },
+    algolia: {
+      applicationID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    }
+  };
+</script>
+
+
+
+  <link rel="canonical" href="https://ymlion.com/post/resources-arsc-parse/"/>
+
+
+
+
+
+  <title>resources.arsc解析 | YMlion's Blog</title>
+  
+
+
+
+
+
+  <script type="text/javascript">
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?93ccb82075a783cf82b4e98bec7097e3";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" lang="zh-Hans">
+
+  
+  
+    
+  
+
+  <div class="container sidebar-position-left page-post-detail">
+    <div class="headband"></div>
+
+    <header id="header" class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-wrapper">
+  <div class="site-meta ">
+    
+
+    <div class="custom-logo-site-title">
+      <a href="/"  class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">YMlion's Blog</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+      
+        <p class="site-subtitle">写点什么</p>
+      
+  </div>
+
+  <div class="site-nav-toggle">
+    <button>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+    </button>
+  </div>
+</div>
+
+<nav class="site-nav">
+  
+
+  
+    <ul id="menu" class="menu">
+      
+        
+        <li class="menu-item menu-item-home">
+          <a href="/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-home"></i> <br />
+            
+            首页
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-tags">
+          <a href="/tags/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-tags"></i> <br />
+            
+            标签
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-categories">
+          <a href="/categories/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-th"></i> <br />
+            
+            分类
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-archives">
+          <a href="/archives/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-archive"></i> <br />
+            
+            归档
+          </a>
+        </li>
+      
+
+      
+    </ul>
+  
+
+  
+</nav>
+
+
+
+ </div>
+    </header>
+
+    <main id="main" class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          <div id="content" class="content">
+            
+
+  <div id="posts" class="posts-expand">
+    
+
+  
+
+  
+  
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="https://ymlion.com/post/resources-arsc-parse/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="YMlion">
+      <meta itemprop="description" content="">
+      <meta itemprop="image" content="/images/avatar.gif">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="YMlion's Blog">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">resources.arsc解析</h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">发表于</span>
+              
+              <time title="创建于" itemprop="dateCreated datePublished" datetime="2018-05-08T16:31:59+08:00">
+                2018-05-08
+              </time>
+            
+
+            
+
+            
+          </span>
+
+          
+            <span class="post-category" >
+            
+              <span class="post-meta-divider">|</span>
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">分类于</span>
+              
+              
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Android/" itemprop="url" rel="index">
+                    <span itemprop="name">Android</span>
+                  </a>
+                </span>
+
+                
+                
+                  ， 
+                
+              
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Android/插件化/" itemprop="url" rel="index">
+                    <span itemprop="name">插件化</span>
+                  </a>
+                </span>
+
+                
+                
+              
+            </span>
+          
+
+          
+            
+          
+
+          
+          
+
+          
+            <span class="post-meta-divider">|</span>
+            <span class="page-pv"><i class="fa fa-file-o"></i>
+            <span class="busuanzi-value" id="busuanzi_value_page_pv" ></span>
+            </span>
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        <p>Android插件化实现过程中，同一进程下插件和宿主资源共享和冲突问题像一座山挡住了路，无法避开。在Android中，所有资源都是通过资源id进行引用，因此，要越过这座山，简单可行的解决方法就是修改资源id。资源id是一个<code>int</code>值，四字节，格式是0xPPTTEEEE：</p>
+<ul>
+<li>PP：package id，第一个字节，范围在[0x01, 0x7f]，系统应用为0x01，第三方应用为0x7f；</li>
+<li>TT：type id，第二个字节，一般有十多个类型，像layout、id、drawable、anim等等；</li>
+<li>EEEE：资源在同类型下的索引。</li>
+</ul>
+<a id="more"></a>
+<p>通过对资源id格式的了解，修改资源id最简单的方法是修改package id，不同的插件包设置不同的package id，就很容易实现资源共享和解决资源冲突。通过分析<a href="https://blog.csdn.net/luoshengyang/article/details/8744683" target="_blank" rel="noopener">资源编译和打包过程</a>，package id的修改方法也就很明确了，主要有三种：</p>
+<ul>
+<li>修改<code>aapt</code>工具源码，在获取package id时进行替换；</li>
+<li>通过<code>public.xml</code>固定资源id；</li>
+<li>修改<code>aapt</code>打包生成的资源相关文件，包括<code>resources.arsc</code>、二进制xml、R.java文件等。</li>
+</ul>
+<p>相对来说，第一种和第二种实现比较简单，但更不可控，有很多变数在里面，这里就不讨论前两种的实现，主要讨论第三种的实现。在最终的生成文件中，其中类似R.java等文本文件修改最为简单，读一行改一行就可以了，而二进制文件则需要分析其格式，找到对应的资源id位置并修改之。本篇就先来分析资源索引表<code>resources.arsc</code>。</p>
+<h2 id="resources-arsc文件结构概览"><a href="#resources-arsc文件结构概览" class="headerlink" title="resources.arsc文件结构概览"></a>resources.arsc文件结构概览</h2><p>在网上一直传播着一张图，也是比较详细刻画<code>resources.arsc</code>结构的一张图，先来看下这张图：</p>
+<p><img src="resources_arsc_detail.png" alt="resouces.arsc详细结构图"></p>
+<p>整体可以看出，<code>arsc</code>文件是由一个一个的chunk(块)组成，整体是一个table chunk，该表由两大部分组成：</p>
+<ul>
+<li>全局字符串池</li>
+<li>package chunk：一般情况下每个apk只有一个package，每个package包含了资源类型及每一个资源项</li>
+</ul>
+<p>该图将每一chunk的构成甚至每一字节都比较详细列了出来，对于整体结构认识有很大帮助，但也可以看出，在package部分，尤其是在<code>Type Spec</code>及其之后，就有点乱了，对于<code>Type Spec</code>及<code>Type Type</code>之间的关系没有搞清楚。所以，为了更正上面这张图的结构错误，我重新做了一张表，除去了详细信息，主要表现整体结构及每个chunk之间的数量及关系：</p>
+<p><img src="resources_arsc.png" alt="resouces.arsc结构图"></p>
+<p>通过这张表去了解package数据块中不同数据块的关系，尤其是<code>type spec</code>和<code>type type</code>之间的关系通过第一张图去了解具体数据块的内容，两者相辅相成就把整个<code>arsc</code>文件结构和内容都表现出来了。</p>
+<h2 id="chunk-header"><a href="#chunk-header" class="headerlink" title="chunk header"></a>chunk header</h2><p>每一个chunk的前8个字节都是一样的，即chunk头，表明chunk类型、头大小及chunk大小，chunk头的结构定义如下：</p>
+<figure class="highlight kotlin"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">internal</span> <span class="class"><span class="keyword">class</span> <span class="title">ResChunkHeader</span></span>() &#123;</span><br><span class="line">    <span class="keyword">companion</span> <span class="keyword">object</span> &#123;</span><br><span class="line">        <span class="keyword">public</span> const <span class="keyword">val</span> RES_NULL_TYPE = <span class="number">0x0000</span></span><br><span class="line">        <span class="keyword">public</span> const <span class="keyword">val</span> RES_STRING_POOL_TYPE = <span class="number">0x0001</span></span><br><span class="line">        <span class="keyword">public</span> const <span class="keyword">val</span> RES_TABLE_TYPE = <span class="number">0x0002</span></span><br><span class="line">        <span class="keyword">public</span> const <span class="keyword">val</span> RES_XML_TYPE = <span class="number">0x0003</span></span><br><span class="line"></span><br><span class="line">        <span class="comment">// Chunk types in RES_XML_TYPE</span></span><br><span class="line">        const <span class="keyword">val</span> RES_XML_FIRST_CHUNK_TYPE    = <span class="number">0x0100</span></span><br><span class="line">        const <span class="keyword">val</span> RES_XML_START_NAMESPACE_TYPE= <span class="number">0x0100</span></span><br><span class="line">        const <span class="keyword">val</span> RES_XML_END_NAMESPACE_TYPE  = <span class="number">0x0101</span></span><br><span class="line">        const <span class="keyword">val</span> RES_XML_START_ELEMENT_TYPE  = <span class="number">0x0102</span></span><br><span class="line">        const <span class="keyword">val</span> RES_XML_END_ELEMENT_TYPE    = <span class="number">0x0103</span></span><br><span class="line">        const <span class="keyword">val</span> RES_XML_CDATA_TYPE          = <span class="number">0x0104</span></span><br><span class="line">        const <span class="keyword">val</span> RES_XML_LAST_CHUNK_TYPE     = <span class="number">0x017f</span></span><br><span class="line">        <span class="comment">// This contains a uint32_t array mapping strings in the string</span></span><br><span class="line">        <span class="comment">// pool back to resource identifiers.  It is optional.</span></span><br><span class="line">        const <span class="keyword">val</span> RES_XML_RESOURCE_MAP_TYPE   = <span class="number">0x0180</span></span><br><span class="line"></span><br><span class="line">        <span class="comment">// Chunk types in RES_TABLE_TYPE</span></span><br><span class="line">        <span class="keyword">public</span> const <span class="keyword">val</span> RES_TABLE_PACKAGE_TYPE = <span class="number">0x0200</span></span><br><span class="line">        <span class="keyword">public</span> const <span class="keyword">val</span> RES_TABLE_TYPE_TYPE = <span class="number">0x0201</span></span><br><span class="line">        <span class="keyword">public</span> const <span class="keyword">val</span> RES_TABLE_TYPE_SPEC_TYPE = <span class="number">0x0202</span></span><br><span class="line">        <span class="keyword">public</span> const <span class="keyword">val</span> RES_TABLE_LIBRARY_TYPE = <span class="number">0x0203</span></span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * chunk type, 2 bytes</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">var</span> type = RES_NULL_TYPE</span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * chunk head size, 2 bytes</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">var</span> headSize = <span class="number">8</span></span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * chunk size = head size + data size, 4 bytes</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">var</span> size = <span class="number">0</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>数据块类型有很多，主要分为通用性、table类型（即<code>arsc</code>文件中出现的类型）、xml类（即xml文件中用到的类型）。<code>resouces.arsc</code>是一个table chunk（资源索引表），chunk类型为<code>RES_TABLE_TYPE</code>，表头除去chunk头，还有4个字节用于表示package数量，正常情况下是1，就不单独列代码了。</p>
+<h2 id="全局资源字符串池"><a href="#全局资源字符串池" class="headerlink" title="全局资源字符串池"></a>全局资源字符串池</h2><p>紧接着表头之后，就是全局资源字符串池，类型为<code>RES_STRING_POOL_TYPE</code>，该数据块存放所有资源中用到的字符串值。首先是头部，共28字节，定义如下：</p>
+<figure class="highlight kotlin"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * 28 bytes，主要描述package中定义的字符串值和字符串样式数量和位置</span></span><br><span class="line"><span class="comment"> *</span></span><br><span class="line"><span class="comment"> * Created by YMlion on 2018/4/18.</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="keyword">internal</span> <span class="class"><span class="keyword">class</span> <span class="title">ResStringPoolHeader</span></span>() &#123;</span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * chunk head, 8 bytes</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">lateinit</span> <span class="keyword">var</span> header: ResChunkHeader</span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * strings count, 4 bytes</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">var</span> stringCount: <span class="built_in">Int</span> = <span class="number">0</span></span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * style count, 4 bytes</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">var</span> styleCount: <span class="built_in">Int</span> = <span class="number">0</span></span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * string 编码格式, 默认UTF-8, 4 bytes</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">var</span> flags: <span class="built_in">Int</span> = <span class="number">0x100</span></span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * strings start offset, 4 bytes</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">var</span> stringsStart: <span class="built_in">Int</span> = <span class="number">0</span></span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * styles start offset, 4 bytes</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">var</span> stylesStart: <span class="built_in">Int</span> = <span class="number">0</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>然后是字符串和样式4字节偏移数组，数量就是<code>ResStringPoolHeader</code>中获取的，记录了每个字符串和样式相对于头部的偏移位置。偏移数组解之后，就是字符串和样式了，先看字符串的结构：</p>
+<figure class="highlight kotlin"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">internal</span> <span class="class"><span class="keyword">class</span> <span class="title">StringPoolString</span></span>() &#123;</span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * string length, 1 byte</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">var</span> len = <span class="number">0</span></span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * string content, length bytes</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">lateinit</span> <span class="keyword">var</span> content: String</span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * 1 byte or 2 bytes</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">var</span> endMark = <span class="number">0</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>字符串长度并不固定，除了本身内容不固定，而且不同的编码格式导致字符串长度不固定。其中<code>ResStringPoolHeader.flags</code>变量来确定当前字符串池中的字符串时以<code>UTF-8</code>还是<code>UTF-16</code>来编码的，<code>flags</code>当为0x100，即<code>UTF-8</code>标志位为1，当为0时则是<code>UTF-16</code>，两者主要区别为：</p>
+<ul>
+<li>UTF-8：每个字符占1个字节，<code>endMark</code>为一个字节，整体前两个字节中的第二个字节表示字符串实际长度；</li>
+<li>UTF-16：每个字符占2个字节，第二个字节为0x00，<code>endMark</code>也是2字节，整体前两个字节表示字符串实际长度，而字符串的所占字节数需要*2。</li>
+</ul>
+<blockquote>
+<p>当编码方式为<code>UTF-8</code>时，前两个字节的第二个字节是字符串长度，但一个字节最大是127，所以当字符串长度大于127时，会多出一个字节，共两个字节表示，实际计算方法是<code>length = b2 or ((b1 and 0x7f) shl 8)</code>。同样，虽然目前没有发现第一个字节有什么用，但其和第二个字节的变化时相同的，大于127时也会多加一个字节。大部分情况下两个字节是相同的，只有少数特殊字符，第一个字节不对，所以整体以第二个字节为准。</p>
+</blockquote>
+<p>把所有字符串解析完之后，需要进行4字节对齐，对齐之后就是字符串样式，其结构如下：</p>
+<figure class="highlight kotlin"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">internal</span> <span class="class"><span class="keyword">class</span> <span class="title">StringPoolStyle</span></span>() &#123;</span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * 该值是字符串在字符串池中的索引，找到后即对应的样式名称，4 bytes</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">var</span> name = <span class="number">0</span></span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * 字符串中应用该样式的起始位置，4 bytes</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">var</span> firstChar = <span class="number">0</span></span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * 字符串中应用该样式的终止位置，4 bytes</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">var</span> lastChar = <span class="number">0</span></span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * 4 bytes</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">var</span> endMark = <span class="number">0xffffffff</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>根据该结构的定义，字符串样式共16字节，样式的名称同样保存在字符串池中，并能够得到该样式应用的起止位置，因此可以得出一个字符串可以对应于多个样式，如斜体、加粗等等，每个样式最后以<code>0xffffffff</code>结尾。</p>
+<p>解析完所有字符串样式之后，会以8字节<code>0xff</code>结尾，但字符串池中的<code>styleCount</code>为0，则不会出现。整个字符串池解析完之后，还需要核对一下当前位置是不是整个chunk的结尾，有可能有4个字节的<code>0x00</code>用来作为整个chunk的结尾。</p>
+<h2 id="package-chunk"><a href="#package-chunk" class="headerlink" title="package chunk"></a>package chunk</h2><p>一个应用的所有资源都要在包数据块中有所体现，尤其像同一种资源不同的配置，所以包数据块整体比较复杂。先来看下头部定义：</p>
+<figure class="highlight kotlin"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">internal</span> <span class="class"><span class="keyword">class</span> <span class="title">ResPackageHeader</span></span>() &#123;</span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * chunk header, 8 bytes</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">lateinit</span> <span class="keyword">var</span> header: ResChunkHeader</span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * package id, 应用默认为0x7F，系统应用为0x01，4 bytes</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">var</span> id = <span class="number">0x7f</span></span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * package name，256 bytes, 除去字符以0x00填充</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">lateinit</span> <span class="keyword">var</span> name: String</span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * 资源类型字符串池相对于头部的偏移，4 bytes</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">var</span> typeStrings = <span class="number">0</span></span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * 资源类型种数，4 bytes</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">var</span> lastPublicType = <span class="number">0</span></span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * 资源名称字符串池相对于头部偏移，4 bytes</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">var</span> keyStrings = <span class="number">0</span></span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * 资源名称数量，4 bytes</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">var</span> lastPublicKey = <span class="number">0</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>包数据块类型为<code>RES_TABLE_PACKAGE_TYPE</code>，通过头部的定义，有三点需要说明：</p>
+<ul>
+<li>package id，即资源id的第一个字节，虽然该变量占据4字节，但是只有第一个字节是有效的，所以这个位置是修改package id的第一个位置；</li>
+<li>头部中用256个字节来确定包名，也可以发现包名长度不能超过256个字符；</li>
+<li>资源类型数量确定了整个包有多少资源类型，同时确定了后面有多少资源类型规范。</li>
+</ul>
+<p>紧接着是资源类型字符串池和资源名称字符串池，这两个数据块和全局资源字符串池结构是相同的，其结构就不再赘述。其中资源类型字符串池保存了包中所有的资源类型，一般十多种；而资源名称字符串池保存了在xml中定义的每个名称(key)，而值(value)如果是字符串则存放在全局资源字符串池中，非字符串则在后面的entry中保存。</p>
+<h2 id="Type-Spec-chunk"><a href="#Type-Spec-chunk" class="headerlink" title="Type Spec chunk"></a>Type Spec chunk</h2><p>资源类型规范数据块用于描述每种类型的资源的配置情况，不同类型甚至不同资源都有可能有不同的配置，每一种类型对应于一种规范，同类型不同配置则在同一规范下有所不同。先看下chunk头定义：</p>
+<figure class="highlight kotlin"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">internal</span> <span class="class"><span class="keyword">class</span> <span class="title">ResTypeSpecHeader</span></span>() &#123;</span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * chunk header, 8 bytes</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">var</span> header: ResChunkHeader? = <span class="literal">null</span></span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * 资源类型id，1 byte, start with 1</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">var</span> id = <span class="number">0</span></span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * 同类型资源数量, 4 bytes</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">var</span> entryCount = <span class="number">0</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>该数据块类型是<code>RES_TABLE_TYPE_SPEC_TYPE</code>，16字节；头部定义了资源类型id，即资源id的第二个字节，同样是4个字节，后三个字节为保留位。</p>
+<p>数据块头之后是4字节为单位的资源项配置数组，在数据块头中的<code>entryCount</code>定义了当前类型有多少资源项，即数组大小，每一项都有一个配置，不同配置对应于不同的标志位。</p>
+<h2 id="类型资源数据块"><a href="#类型资源数据块" class="headerlink" title="类型资源数据块"></a>类型资源数据块</h2><p>同一类型的资源有可能有多种配置，像不同尺寸的drawable，每种配置下的资源项数量也不一定相同，因此该数据块用于描述资源配置信息。首先是头部定义：</p>
+<figure class="highlight kotlin"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">internal</span> <span class="class"><span class="keyword">class</span> <span class="title">ResTypeHeader</span></span>() &#123;</span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * chunk header, 8 bytes</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">lateinit</span> <span class="keyword">var</span> header: ResChunkHeader</span><br><span class="line"></span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * type id, 1 byte</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">var</span> id = <span class="number">0</span></span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * 该类型资源数量，4 bytes</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">var</span> entryCount = <span class="number">0</span></span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * offset, 4 bytes</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">var</span> entriesStart = <span class="number">0</span></span><br><span class="line"></span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * 该部分配置信息和android版本相关，大小有可能不同</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="class"><span class="keyword">class</span> <span class="title">ResTableConfig</span> </span>&#123;</span><br><span class="line">        <span class="comment">/**</span></span><br><span class="line"><span class="comment">         * 该部分大小，默认大小52字节，4 bytes</span></span><br><span class="line"><span class="comment">         */</span></span><br><span class="line">        <span class="keyword">var</span> size = <span class="number">0x34</span></span><br><span class="line">        <span class="comment">/**</span></span><br><span class="line"><span class="comment">         * 移动设备国家代码，2 bytes，中国460</span></span><br><span class="line"><span class="comment">         */</span></span><br><span class="line">        <span class="keyword">var</span> mcc = <span class="number">0</span></span><br><span class="line">        <span class="comment">/**</span></span><br><span class="line"><span class="comment">         * 移动网络代码，2 bytes，移动00，和mcc确定网络运营商</span></span><br><span class="line"><span class="comment">         */</span></span><br><span class="line">        <span class="keyword">var</span> mnc = <span class="number">0</span></span><br><span class="line">        <span class="comment">/**</span></span><br><span class="line"><span class="comment">         * 4 bytes，前两个字节为语言，后两个为国家</span></span><br><span class="line"><span class="comment">         */</span></span><br><span class="line">        <span class="keyword">var</span> locale = <span class="number">0</span></span><br><span class="line">        <span class="comment">/**</span></span><br><span class="line"><span class="comment">         * 方向, 1 byte</span></span><br><span class="line"><span class="comment">         */</span></span><br><span class="line">        <span class="keyword">var</span> orientation = <span class="number">0</span></span><br><span class="line">        <span class="comment">/**</span></span><br><span class="line"><span class="comment">         * 1 byte</span></span><br><span class="line"><span class="comment">         */</span></span><br><span class="line">        <span class="keyword">var</span> touchscreen = <span class="number">0</span></span><br><span class="line">        <span class="comment">/**</span></span><br><span class="line"><span class="comment">         * 2 bytes</span></span><br><span class="line"><span class="comment">         */</span></span><br><span class="line">        <span class="keyword">var</span> density = <span class="number">0</span></span><br><span class="line">        <span class="comment">/**</span></span><br><span class="line"><span class="comment">         * 4 bytes, 4字节分别对应不同属性</span></span><br><span class="line"><span class="comment">         */</span></span><br><span class="line">        <span class="keyword">var</span> input = <span class="number">0</span></span><br><span class="line">        <span class="comment">/**</span></span><br><span class="line"><span class="comment">         * 2 bytes</span></span><br><span class="line"><span class="comment">         */</span></span><br><span class="line">        <span class="keyword">var</span> screenWidth = <span class="number">0</span></span><br><span class="line">        <span class="comment">/**</span></span><br><span class="line"><span class="comment">         * 2 bytes</span></span><br><span class="line"><span class="comment">         */</span></span><br><span class="line">        <span class="keyword">var</span> screenHeight = <span class="number">0</span></span><br><span class="line">        <span class="comment">/**</span></span><br><span class="line"><span class="comment">         * 2 bytes</span></span><br><span class="line"><span class="comment">         */</span></span><br><span class="line">        <span class="keyword">var</span> sdkVersion = <span class="number">0</span></span><br><span class="line">        <span class="comment">/**</span></span><br><span class="line"><span class="comment">         * 2 bytes, always 0</span></span><br><span class="line"><span class="comment">         */</span></span><br><span class="line">        <span class="keyword">var</span> minorVersion = <span class="number">0</span></span><br><span class="line">        <span class="comment">/**</span></span><br><span class="line"><span class="comment">         * 4 bytes, 1 + 1 + 2 bytes对应不同属性</span></span><br><span class="line"><span class="comment">         */</span></span><br><span class="line">        <span class="keyword">var</span> screenConfig = <span class="number">0</span></span><br><span class="line">        <span class="comment">/**</span></span><br><span class="line"><span class="comment">         * 2 bytes</span></span><br><span class="line"><span class="comment">         */</span></span><br><span class="line">        <span class="keyword">var</span> screenWidthDp = <span class="number">0</span></span><br><span class="line">        <span class="comment">/**</span></span><br><span class="line"><span class="comment">         * 2 bytes</span></span><br><span class="line"><span class="comment">         */</span></span><br><span class="line">        <span class="keyword">var</span> screenHeightDp = <span class="number">0</span></span><br><span class="line">        <span class="comment">/**</span></span><br><span class="line"><span class="comment">         * 4 bytes</span></span><br><span class="line"><span class="comment">         */</span></span><br><span class="line">        <span class="keyword">var</span> localeScript = CharArray(<span class="number">4</span>)</span><br><span class="line">        <span class="comment">/**</span></span><br><span class="line"><span class="comment">         * 8 bytes</span></span><br><span class="line"><span class="comment">         */</span></span><br><span class="line">        <span class="keyword">var</span> localeVariant = CharArray(<span class="number">8</span>)</span><br><span class="line">        <span class="comment">/**</span></span><br><span class="line"><span class="comment">         * 4 bytes</span></span><br><span class="line"><span class="comment">         */</span></span><br><span class="line">        <span class="keyword">var</span> screenConfig2 = <span class="number">0</span></span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>该数据块类型是<code>RES_TABLE_TYPE_TYPE</code>，其中<code>id</code>和<code>entryCount</code>和类型规范中是相同的，<code>entryCount</code>并不是当前配置的资源项数量，除去前20个字节，后面就是资源配置数据结构，用于描述当前的类型资源配置，该部分大小和android版本有关，具体配置内容可以看上面的代码。</p>
+<p>数据头之后就是4字节资源项偏移数组，如果该资源项在当前的配置中，则其偏移量非负，否则为<code>0xFFFFFFFF</code>，即-1，通过计算非负偏移量个数，可以得到当前配置下的资源项数量。</p>
+<h2 id="资源项"><a href="#资源项" class="headerlink" title="资源项"></a>资源项</h2><p>资源项包括资源名称和资源值，先来看下其定义：</p>
+<figure class="highlight kotlin"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">internal</span> <span class="keyword">open</span> <span class="class"><span class="keyword">class</span> <span class="title">ResTableEntry</span> </span>&#123;</span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * 2 bytes</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">var</span> size = <span class="number">0</span></span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * flags为1时，该资源为bag资源，该entry为map entry，即多了8字节，并且在该entry之后，会有map数组；</span></span><br><span class="line"><span class="comment">     * 否则为非bag资源，在该entry之后，为value。</span></span><br><span class="line"><span class="comment">     * &lt;p&gt; 2 bytes &lt;/p&gt;</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">var</span> flags = <span class="number">1</span></span><br><span class="line"></span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * 资源名称在资源名称字符串池中的索引，4字节</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">var</span> key = <span class="number">0</span></span><br><span class="line"></span><br><span class="line">    <span class="class"><span class="keyword">class</span> <span class="title">ResMapEntry</span></span>() : ResTableEntry() &#123;</span><br><span class="line">        <span class="comment">/**</span></span><br><span class="line"><span class="comment">         * 父节点，4字节</span></span><br><span class="line"><span class="comment">         */</span></span><br><span class="line">        <span class="keyword">var</span> parent = <span class="number">0</span></span><br><span class="line">        <span class="comment">/**</span></span><br><span class="line"><span class="comment">         * bag资源可取值数量，4字节</span></span><br><span class="line"><span class="comment">         */</span></span><br><span class="line">        <span class="keyword">var</span> count = <span class="number">0</span></span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="class"><span class="keyword">class</span> <span class="title">ResTableMap</span> </span>&#123;</span><br><span class="line">        <span class="comment">/**</span></span><br><span class="line"><span class="comment">         * 资源id, 4 bytes</span></span><br><span class="line"><span class="comment">         */</span></span><br><span class="line">        <span class="keyword">var</span> name = <span class="number">0</span></span><br><span class="line"></span><br><span class="line">        <span class="keyword">lateinit</span> <span class="keyword">var</span> value: ResValue</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">internal</span> <span class="class"><span class="keyword">class</span> <span class="title">ResValue</span></span>() &#123;</span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * 该类字节数, 2 bytes</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">var</span> size = <span class="number">0</span></span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * 0, 1 byte</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">var</span> res0 = <span class="number">0</span></span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * 资源数据类型, 1 byte</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">var</span> dataType = <span class="number">0</span></span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * 资源值或资源id，值或值在字符串池中的索引, 4 bytes</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">var</span> <span class="keyword">data</span> = <span class="number">0</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>这里涉及多个数据结构，资源项的名字用<code>ResTableEntry.key</code>表示，该值是在<strong>资源名称字符串池</strong>中的索引；其中<code>flags</code>来区别资源项是否是bag资源，bag资源因为多一层定义，所以为了定义该资源值，则需要使用<code>ResMapEntry</code>来定义，确定bag取值数量及其父亲id，若无则为0。</p>
+<blockquote>
+<p>根据资源值不同，分为bag资源和非bag资源，bag资源通俗来说是引用，并不是实际的值，在属性定义时，有时会定义该属性的值有几个选项，像<code>layout_width</code>，定义其值可以是<code>match_parent</code>、<code>wrap_content</code>等，类似枚举，这种资源就是bag资源；非bag资源的值就是实际的值。</p>
+</blockquote>
+<p>bag资源取值有多个，所以紧跟<code>ResMapEntry</code>之后是<code>ResMapEntry.count</code>个<code>ResTableMap</code>的数组，<code>ResTableMap.name</code>是当前bag的资源id。无论是bag资源还是非bag资源，资源值的结构都是<code>ResValue</code>，其中<code>ResValue.dataType</code>有多种，像<code>color</code>、<code>string</code>等，具体取值如下：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">enum</span> &#123;</span><br><span class="line">    <span class="comment">// Contains no data.  </span></span><br><span class="line">    TYPE_NULL = <span class="number">0x00</span>,</span><br><span class="line">    <span class="comment">// The 'data' holds a ResTable_ref, a reference to another resource  </span></span><br><span class="line">    <span class="comment">// table entry.  </span></span><br><span class="line">    TYPE_REFERENCE = <span class="number">0x01</span>,</span><br><span class="line">    <span class="comment">// The 'data' holds an attribute resource identifier.  </span></span><br><span class="line">    TYPE_ATTRIBUTE = <span class="number">0x02</span>,</span><br><span class="line">    <span class="comment">// The 'data' holds an index into the containing resource table's  </span></span><br><span class="line">    <span class="comment">// global value string pool.  </span></span><br><span class="line">    TYPE_STRING = <span class="number">0x03</span>,</span><br><span class="line">    <span class="comment">// The 'data' holds a single-precision floating point number.  </span></span><br><span class="line">    TYPE_FLOAT = <span class="number">0x04</span>,</span><br><span class="line">    <span class="comment">// The 'data' holds a complex number encoding a dimension value,  </span></span><br><span class="line">    <span class="comment">// such as "100in".  </span></span><br><span class="line">    TYPE_DIMENSION = <span class="number">0x05</span>,</span><br><span class="line">    <span class="comment">// The 'data' holds a complex number encoding a fraction of a  </span></span><br><span class="line">    <span class="comment">// container.  </span></span><br><span class="line">    TYPE_FRACTION = <span class="number">0x06</span>,</span><br><span class="line">    <span class="comment">// Beginning of integer flavors...  </span></span><br><span class="line">    TYPE_FIRST_INT = <span class="number">0x10</span>,</span><br><span class="line">    <span class="comment">// The 'data' is a raw integer value of the form n..n.  </span></span><br><span class="line">    TYPE_INT_DEC = <span class="number">0x10</span>,</span><br><span class="line">    <span class="comment">// The 'data' is a raw integer value of the form 0xn..n.  </span></span><br><span class="line">    TYPE_INT_HEX = <span class="number">0x11</span>,</span><br><span class="line">    <span class="comment">// The 'data' is either 0 or 1, for input "false" or "true" respectively.  </span></span><br><span class="line">    TYPE_INT_BOOLEAN = <span class="number">0x12</span>,</span><br><span class="line">    <span class="comment">// Beginning of color integer flavors...  </span></span><br><span class="line">    TYPE_FIRST_COLOR_INT = <span class="number">0x1c</span>,</span><br><span class="line">    <span class="comment">// The 'data' is a raw integer value of the form #aarrggbb.  </span></span><br><span class="line">    TYPE_INT_COLOR_ARGB8 = <span class="number">0x1c</span>,</span><br><span class="line">    <span class="comment">// The 'data' is a raw integer value of the form #rrggbb.  </span></span><br><span class="line">    <span class="comment">// The 'data' is a raw integer value of the form #aarrggbb.  </span></span><br><span class="line">    TYPE_INT_COLOR_ARGB8 = <span class="number">0x1c</span>,</span><br><span class="line">    <span class="comment">// The 'data' is a raw integer value of the form #rrggbb.  </span></span><br><span class="line">    TYPE_INT_COLOR_RGB8 = <span class="number">0x1d</span>,</span><br><span class="line">    <span class="comment">// The 'data' is a raw integer value of the form #argb.  </span></span><br><span class="line">    TYPE_INT_COLOR_ARGB4 = <span class="number">0x1e</span>,</span><br><span class="line">    <span class="comment">// The 'data' is a raw integer value of the form #rgb.  </span></span><br><span class="line">    TYPE_INT_COLOR_RGB4 = <span class="number">0x1f</span>,</span><br><span class="line">    <span class="comment">// ...end of integer flavors.  </span></span><br><span class="line">    TYPE_LAST_COLOR_INT = <span class="number">0x1f</span>,</span><br><span class="line">    <span class="comment">// ...end of integer flavors.  </span></span><br><span class="line">    TYPE_LAST_INT = <span class="number">0x1f</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>资源数据类型不同取值会决定资源值<code>ResValue.data</code>是何种形式，如果是字符串，则<code>data</code>就是全局资源字符串池中的索引，如果是数值则就是实际值，如果是<code>color</code>并属于bag资源则是资源id。</p>
+<p>资源项这部分涉及到资源id的有3个地方，分别是<code>ResMapEntry.parent</code>、<code>ResTableMap.name</code>、<code>ResValue.data</code>，当然以上3处的实际值并不一定是资源id，只是有可能是，所以在修改package id的时候，先判断一下该资源id的第一个字节是不是<code>0x7f</code>，如果是则修改之。</p>
+<h2 id="解析小结"><a href="#解析小结" class="headerlink" title="解析小结"></a>解析小结</h2><p>分析完资源项的结构，整个资源索引表的详细结构就都分析完了，再次捋顺一下包数据块的结构逻辑：每个package包含多个资源类型，每个资源类型对应一种类型规范，每个类型规范中有一种或多种资源配置，每种配置下都有至少一个资源项，所有配置下的资源项数相加的和就是类型规范中定义的资源项数。下面看下具体解析代码逻辑：</p>
+<figure class="highlight kotlin"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">override</span> <span class="function"><span class="keyword">fun</span> <span class="title">parse</span><span class="params">()</span></span>: <span class="built_in">Boolean</span> &#123;</span><br><span class="line">    <span class="keyword">val</span> tableHeader = parseTableHeader()</span><br><span class="line">    <span class="comment">// 解析全局字符串资源值，字符串池存放所有资源的值，并且该值为字符串</span></span><br><span class="line">    <span class="comment">// 像所有的xml文件名、图片资源名、xml中定义的字符串、系统定义的字符串</span></span><br><span class="line">    parseStringPool()</span><br><span class="line">    <span class="keyword">val</span> packageHeader = parsePackageHeader()</span><br><span class="line">    <span class="comment">// package chunk后面是资源类型字符串池和资源名称字符串池</span></span><br><span class="line">    <span class="comment">// 这两部分的结构和和前面的字符串池结构相同，只不过字符串样式数量为0</span></span><br><span class="line">    <span class="comment">// 先解析资源类型字符串池，资源类型有限，一般十多种</span></span><br><span class="line">    parseStringPool()</span><br><span class="line">    <span class="comment">// 解析资源名称字符串池，资源定义中的属性(key)字符串存放在这里，值(value)有一部分存放在全局字符串池中，非字符串则存放在后面的entry中</span></span><br><span class="line">    parseStringPool()</span><br><span class="line">    <span class="comment">// 后面同样属于package部分，根据资源类型数量，分别解析，直到全部解析完</span></span><br><span class="line">    <span class="keyword">var</span> resHeader = ResChunkHeader(mInput)</span><br><span class="line">    <span class="comment">// 有多少资源类型，后面就有多少 type spec</span></span><br><span class="line">    <span class="keyword">for</span> (i <span class="keyword">in</span> <span class="number">0</span> until packageHeader.lastPublicType) &#123;</span><br><span class="line">        <span class="keyword">val</span> specHeader = ResTypeSpecHeader(mInput, resHeader)</span><br><span class="line">        <span class="comment">// spec 资源数组</span></span><br><span class="line">        mInput.skipBytes(<span class="number">4</span> * specHeader.entryCount)</span><br><span class="line">        resHeader = ResChunkHeader(mInput)</span><br><span class="line">        <span class="keyword">while</span> (resHeader.type == <span class="number">0x0201</span>) &#123;<span class="comment">// 每种类型的资源可以有多种配置</span></span><br><span class="line">            <span class="keyword">val</span> typeHeader = ResTypeHeader(mInput, resHeader)</span><br><span class="line">            println(typeHeader)</span><br><span class="line">            <span class="keyword">val</span> chunkEnd = mInput.filePointer + typeHeader.header.size - typeHeader.header.headSize</span><br><span class="line">            <span class="comment">// entry偏移数组</span></span><br><span class="line">            mInput.skipBytes(typeHeader.entryCount * <span class="number">4</span>)</span><br><span class="line">            <span class="comment">// 读取资源项</span></span><br><span class="line">            <span class="comment">// 同一类型的资源可能有不同的配置，当前配置下不一定有所有的资源，只有是该配置的资源才会出现</span></span><br><span class="line">            <span class="comment">// 因此entry的数量是当前配置的资源数量，并不一定是全部，具体有多少个在entry偏移数组中有所体现</span></span><br><span class="line">            <span class="comment">// entry数组中偏移值为正的则在当前配置下</span></span><br><span class="line">            <span class="keyword">while</span> (mInput.filePointer &lt; chunkEnd) &#123;<span class="comment">// 根据整个type块的大小来确定是否读取完</span></span><br><span class="line">                ResMapEntry(mInput)</span><br><span class="line">            &#125;</span><br><span class="line">            <span class="keyword">if</span> (tableHeader.header.size == mInput.filePointer.toInt()) &#123;</span><br><span class="line">                <span class="keyword">break</span></span><br><span class="line">            &#125;</span><br><span class="line">            resHeader = ResChunkHeader(mInput)</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    mInput.close()</span><br><span class="line">    <span class="keyword">return</span> available</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>解析逻辑很清晰，那么修改package id也就很简单了，找到对应的位置修改就可以了，就不再展示代码了。</p>
+<h2 id="小结"><a href="#小结" class="headerlink" title="小结"></a>小结</h2><p>资源索引表是所有二进制资源文件中最复杂的一个，主要是在package数据块里面稍显复杂的逻辑关系，这也是理清整个结构的关键点。另外资源索引表同样加入了第三方库中的资源项，这也同样加大了复杂度。</p>
+<p>插件化时，修改的是插件的资源索引表，为了资源冲突和共享，所以更深一点思考，除了修改资源id，还需要把宿主和插件相同的资源在插件中去除，这样就更好了。换一个角度思考，资源索引表中有所有资源文件的字符串，因此就资源混淆角度来说，替换资源文件对应的字符串为混淆后的字符串，并修改每个资源文件的路径和名称，重新打包则就实现了资源混淆，这也是<a href="https://github.com/shwenzhang/AndResGuard" target="_blank" rel="noopener">AndResGuard</a>的基本原理。</p>
+<p>下一篇分析二进制xml文件的结构并修改资源id，具体实现代码都在<a href="https://github.com/YMlion/android-res-parser" target="_blank" rel="noopener">android-res-parser库</a>。</p>
+
+      
+    </div>
+    
+    
+    
+
+    
+
+    
+
+    
+
+    <footer class="post-footer">
+      
+        <div class="post-tags">
+          
+            <a href="/tags/Android/" rel="tag"># Android</a>
+          
+            <a href="/tags/插件化/" rel="tag"># 插件化</a>
+          
+            <a href="/tags/资源打包/" rel="tag"># 资源打包</a>
+          
+        </div>
+      
+
+      
+      
+      
+
+      
+        <div class="post-nav">
+          <div class="post-nav-next post-nav-item">
+            
+              <a href="/post/plugin-appcompat-activity/" rel="next" title="插件化之启动AppCompatActivity">
+                <i class="fa fa-chevron-left"></i> 插件化之启动AppCompatActivity
+              </a>
+            
+          </div>
+
+          <span class="post-nav-divider"></span>
+
+          <div class="post-nav-prev post-nav-item">
+            
+          </div>
+        </div>
+      
+
+      
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+
+    <div class="post-spread">
+      
+    </div>
+  </div>
+
+
+          </div>
+          
+
+
+          
+
+  
+
+
+
+        </div>
+        
+          
+  
+  <div class="sidebar-toggle">
+    <div class="sidebar-toggle-line-wrap">
+      <span class="sidebar-toggle-line sidebar-toggle-line-first"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-middle"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-last"></span>
+    </div>
+  </div>
+
+  <aside id="sidebar" class="sidebar">
+    
+    <div class="sidebar-inner">
+
+      
+
+      
+        <ul class="sidebar-nav motion-element">
+          <li class="sidebar-nav-toc sidebar-nav-active" data-target="post-toc-wrap">
+            文章目录
+          </li>
+          <li class="sidebar-nav-overview" data-target="site-overview-wrap">
+            站点概览
+          </li>
+        </ul>
+      
+
+      <section class="site-overview-wrap sidebar-panel">
+        <div class="site-overview">
+          <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+            
+              <p class="site-author-name" itemprop="name">YMlion</p>
+              <p class="site-description motion-element" itemprop="description">业精于勤，荒于嬉；行成于思，毁于随。</p>
+          </div>
+
+          <nav class="site-state motion-element">
+
+            
+              <div class="site-state-item site-state-posts">
+              
+                <a href="/archives/">
+              
+                  <span class="site-state-item-count">11</span>
+                  <span class="site-state-item-name">日志</span>
+                </a>
+              </div>
+            
+
+            
+              
+              
+              <div class="site-state-item site-state-categories">
+                <a href="/categories/index.html">
+                  <span class="site-state-item-count">3</span>
+                  <span class="site-state-item-name">分类</span>
+                </a>
+              </div>
+            
+
+            
+              
+              
+              <div class="site-state-item site-state-tags">
+                <a href="/tags/index.html">
+                  <span class="site-state-item-count">11</span>
+                  <span class="site-state-item-name">标签</span>
+                </a>
+              </div>
+            
+
+          </nav>
+
+          
+            <div class="feed-link motion-element">
+              <a href="/atom.xml" rel="alternate">
+                <i class="fa fa-rss"></i>
+                RSS
+              </a>
+            </div>
+          
+
+          <div class="links-of-author motion-element">
+            
+              
+                <span class="links-of-author-item">
+                  <a href="https://github.com/YMlion" target="_blank" title="GitHub">
+                    
+                      <i class="fa fa-fw fa-github"></i>GitHub</a>
+                </span>
+              
+                <span class="links-of-author-item">
+                  <a href="mailto:lmion.yao@gmail.com" target="_blank" title="E-Mail">
+                    
+                      <i class="fa fa-fw fa-envelope"></i>E-Mail</a>
+                </span>
+              
+            
+          </div>
+
+          
+          
+
+          
+          
+
+          
+
+        </div>
+      </section>
+
+      
+      <!--noindex-->
+        <section class="post-toc-wrap motion-element sidebar-panel sidebar-panel-active">
+          <div class="post-toc">
+
+            
+              
+            
+
+            
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#resources-arsc文件结构概览"><span class="nav-number">1.</span> <span class="nav-text">resources.arsc文件结构概览</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#chunk-header"><span class="nav-number">2.</span> <span class="nav-text">chunk header</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#全局资源字符串池"><span class="nav-number">3.</span> <span class="nav-text">全局资源字符串池</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#package-chunk"><span class="nav-number">4.</span> <span class="nav-text">package chunk</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Type-Spec-chunk"><span class="nav-number">5.</span> <span class="nav-text">Type Spec chunk</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#类型资源数据块"><span class="nav-number">6.</span> <span class="nav-text">类型资源数据块</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#资源项"><span class="nav-number">7.</span> <span class="nav-text">资源项</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#解析小结"><span class="nav-number">8.</span> <span class="nav-text">解析小结</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#小结"><span class="nav-number">9.</span> <span class="nav-text">小结</span></a></li></ol></div>
+            
+
+          </div>
+        </section>
+      <!--/noindex-->
+      
+
+      
+
+    </div>
+  </aside>
+
+
+        
+      </div>
+    </main>
+
+    <footer id="footer" class="footer">
+      <div class="footer-inner">
+        <div class="copyright">&copy; 2015 &mdash; <span itemprop="copyrightYear">2018</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">YMlion</span>
+
+  
+</div>
+
+
+  <div class="powered-by">由 <a class="theme-link" target="_blank" href="https://hexo.io">Hexo</a> 强力驱动</div>
+
+
+
+  <span class="post-meta-divider">|</span>
+
+
+
+  <div class="theme-info">主题 &mdash; <a class="theme-link" target="_blank" href="https://github.com/iissnan/hexo-theme-next">NexT.Pisces</a></div>
+
+
+
+
+        
+<div class="busuanzi-count">
+  <script async src="https://dn-lbstatics.qbox.me/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+  
+    <span class="site-uv">
+      <i class="fa fa-user"></i>
+      <span class="busuanzi-value" id="busuanzi_value_site_uv"></span>
+      
+    </span>
+  
+
+  
+    <span class="site-pv">
+      <i class="fa fa-eye"></i>
+      <span class="busuanzi-value" id="busuanzi_value_site_pv"></span>
+      
+    </span>
+  
+</div>
+
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+
+    
+      <div class="back-to-top">
+        <i class="fa fa-arrow-up"></i>
+        
+      </div>
+    
+
+    
+
+  </div>
+
+  
+
+<script type="text/javascript">
+  if (Object.prototype.toString.call(window.Promise) !== '[object Function]') {
+    window.Promise = null;
+  }
+</script>
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+    <script type="text/javascript" src="/lib/jquery/index.js?v=2.1.3"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/fastclick/lib/fastclick.min.js?v=1.0.6"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/jquery_lazyload/jquery.lazyload.js?v=1.9.7"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/fancybox/source/jquery.fancybox.pack.js?v=2.1.5"></script>
+  
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/utils.js?v=5.1.3"></script>
+
+  <script type="text/javascript" src="/js/src/motion.js?v=5.1.3"></script>
+
+
+
+  
+  
+
+
+  <script type="text/javascript" src="/js/src/affix.js?v=5.1.3"></script>
+
+  <script type="text/javascript" src="/js/src/schemes/pisces.js?v=5.1.3"></script>
+
+
+
+  
+  <script type="text/javascript" src="/js/src/scrollspy.js?v=5.1.3"></script>
+<script type="text/javascript" src="/js/src/post-details.js?v=5.1.3"></script>
+
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/bootstrap.js?v=5.1.3"></script>
+
+
+
+  
+
+
+  
+
+
+
+
+	
+
+
+
+
+
+  
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+
+  
+
+  
+
+  
+
+  
+  
+
+  
+
+  
+
+  
+
+</body>
+</html>
