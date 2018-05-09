@@ -1,0 +1,841 @@
+<!DOCTYPE html>
+
+
+
+  
+
+
+<html class="theme-next pisces use-motion" lang="zh-Hans">
+<head>
+  <meta charset="UTF-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
+<meta name="theme-color" content="#222">
+
+
+
+
+
+
+
+
+
+<meta http-equiv="Cache-Control" content="no-transform" />
+<meta http-equiv="Cache-Control" content="no-siteapp" />
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+  <link href="/lib/fancybox/source/jquery.fancybox.css?v=2.1.5" rel="stylesheet" type="text/css" />
+
+
+
+
+
+
+
+<link href="/lib/font-awesome/css/font-awesome.min.css?v=4.6.2" rel="stylesheet" type="text/css" />
+
+<link href="/css/main.css?v=5.1.3" rel="stylesheet" type="text/css" />
+
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=5.1.3">
+
+
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=5.1.3">
+
+
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=5.1.3">
+
+
+  <link rel="mask-icon" href="/images/logo.svg?v=5.1.3" color="#222">
+
+
+
+
+
+  <meta name="keywords" content="Android,插件化,资源打包," />
+
+
+
+
+
+  <link rel="alternate" href="/atom.xml" title="YMlion's Blog" type="application/atom+xml" />
+
+
+
+
+
+
+<meta name="description" content="在Android资源编译和打包过程中，对于res目录下的所有xml文件，除去res/raw/文件夹下的文件不被处理，其他的xml文件都需要被编译，其中values下的xml资源文件解析之后就保存到资源索引表resources.arsc里面，其他xml文件都由文本格式编译为二进制格式，另外AndroidManifest.">
+<meta name="keywords" content="Android,插件化,资源打包">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Android二进制xml资源文件解析">
+<meta property="og:url" content="https://ymlion.com/post/res-xml-parse/index.html">
+<meta property="og:site_name" content="YMlion&#39;s Blog">
+<meta property="og:description" content="在Android资源编译和打包过程中，对于res目录下的所有xml文件，除去res/raw/文件夹下的文件不被处理，其他的xml文件都需要被编译，其中values下的xml资源文件解析之后就保存到资源索引表resources.arsc里面，其他xml文件都由文本格式编译为二进制格式，另外AndroidManifest.xml也是被编译为二进制格式。 二进制格式相比文本格式有很大的优势，想想reso">
+<meta property="og:locale" content="zh-Hans">
+<meta property="og:image" content="https://ymlion.com/post/res-xml-parse/xml_structure.png">
+<meta property="og:updated_time" content="2018-05-09T11:30:56.429Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Android二进制xml资源文件解析">
+<meta name="twitter:description" content="在Android资源编译和打包过程中，对于res目录下的所有xml文件，除去res/raw/文件夹下的文件不被处理，其他的xml文件都需要被编译，其中values下的xml资源文件解析之后就保存到资源索引表resources.arsc里面，其他xml文件都由文本格式编译为二进制格式，另外AndroidManifest.xml也是被编译为二进制格式。 二进制格式相比文本格式有很大的优势，想想reso">
+<meta name="twitter:image" content="https://ymlion.com/post/res-xml-parse/xml_structure.png">
+
+
+
+<script type="text/javascript" id="hexo.configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Pisces',
+    version: '5.1.3',
+    sidebar: {"position":"left","display":"post","offset":12,"b2t":false,"scrollpercent":false,"onmobile":false},
+    fancybox: true,
+    tabs: true,
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    duoshuo: {
+      userId: '0',
+      author: '博主'
+    },
+    algolia: {
+      applicationID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    }
+  };
+</script>
+
+
+
+  <link rel="canonical" href="https://ymlion.com/post/res-xml-parse/"/>
+
+
+
+
+
+  <title>Android二进制xml资源文件解析 | YMlion's Blog</title>
+  
+
+
+
+
+
+  <script type="text/javascript">
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?93ccb82075a783cf82b4e98bec7097e3";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" lang="zh-Hans">
+
+  
+  
+    
+  
+
+  <div class="container sidebar-position-left page-post-detail">
+    <div class="headband"></div>
+
+    <header id="header" class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-wrapper">
+  <div class="site-meta ">
+    
+
+    <div class="custom-logo-site-title">
+      <a href="/"  class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">YMlion's Blog</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+      
+        <p class="site-subtitle">写点什么</p>
+      
+  </div>
+
+  <div class="site-nav-toggle">
+    <button>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+    </button>
+  </div>
+</div>
+
+<nav class="site-nav">
+  
+
+  
+    <ul id="menu" class="menu">
+      
+        
+        <li class="menu-item menu-item-home">
+          <a href="/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-home"></i> <br />
+            
+            首页
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-tags">
+          <a href="/tags/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-tags"></i> <br />
+            
+            标签
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-categories">
+          <a href="/categories/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-th"></i> <br />
+            
+            分类
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-archives">
+          <a href="/archives/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-archive"></i> <br />
+            
+            归档
+          </a>
+        </li>
+      
+
+      
+    </ul>
+  
+
+  
+</nav>
+
+
+
+ </div>
+    </header>
+
+    <main id="main" class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          <div id="content" class="content">
+            
+
+  <div id="posts" class="posts-expand">
+    
+
+  
+
+  
+  
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="https://ymlion.com/post/res-xml-parse/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="YMlion">
+      <meta itemprop="description" content="">
+      <meta itemprop="image" content="/images/avatar.gif">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="YMlion's Blog">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">Android二进制xml资源文件解析</h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">发表于</span>
+              
+              <time title="创建于" itemprop="dateCreated datePublished" datetime="2018-05-09T19:25:34+08:00">
+                2018-05-09
+              </time>
+            
+
+            
+
+            
+          </span>
+
+          
+            <span class="post-category" >
+            
+              <span class="post-meta-divider">|</span>
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">分类于</span>
+              
+              
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Android/" itemprop="url" rel="index">
+                    <span itemprop="name">Android</span>
+                  </a>
+                </span>
+
+                
+                
+                  ， 
+                
+              
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Android/插件化/" itemprop="url" rel="index">
+                    <span itemprop="name">插件化</span>
+                  </a>
+                </span>
+
+                
+                
+              
+            </span>
+          
+
+          
+            
+          
+
+          
+          
+
+          
+            <span class="post-meta-divider">|</span>
+            <span class="page-pv"><i class="fa fa-file-o"></i>
+            <span class="busuanzi-value" id="busuanzi_value_page_pv" ></span>
+            </span>
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        <p>在Android资源编译和打包过程中，对于<code>res</code>目录下的所有xml文件，除去<code>res/raw/</code>文件夹下的文件不被处理，其他的xml文件都需要被编译，其中<code>values</code>下的xml资源文件解析之后就保存到资源索引表<code>resources.arsc</code>里面，其他xml文件都由文本格式编译为二进制格式，另外<code>AndroidManifest.xml</code>也是被编译为二进制格式。</p>
+<p>二进制格式相比文本格式有很大的优势，想想<code>resources.arsc</code>解析，显而易见字节处理比文本处理效率更高，有合理的结构更容易解析，同时二进制格式占用空间更小。简单来说，资源文件编译和打包过程就是为了apk更小、package和应用运行时解析资源文件更快。</p>
+<a id="more"></a>
+<h2 id="文件结构"><a href="#文件结构" class="headerlink" title="文件结构"></a>文件结构</h2><p><img src="xml_structure.png" alt="xml结构表"></p>
+<p>整体看一下，看一看到有些部分和<code>resources.arsc</code>是相同的，其中两者都是以chunk组成。二进制xml文件开头是8字节的chunk头，类型是<code>RES_XML_TYPE</code>，并确定整个文件的大小；之后是资源字符串池，同样和<code>resources.arsc</code>是相同的，存放了xml文件中所用的字符串；然后是资源id数组数据块，类型是<code>RES_XML_RESOURCE_MAP_TYPE</code>，存放所有节点中有id的属性的id，像系统属性layout_width等和自定义属性，系统属性id值是固定的，如果整个文件中没有用到属性，则该数据块就不会出现；在后面就是xml文件中的节点了，由命名空间开始，经过各种节点，以及节点间的嵌套（节点开始和结束数据块交叉），最终由命名空间结束。</p>
+<p>在资源id数据块中，如果当前的xml文件中有自定义的属性，则其对应的id是需要修改的，系统属性则不需要，所以在解析该部分时，需要判断id的第一个字节是否是<code>0x7f</code>，是则改之。</p>
+<p>在开发时，创建的每一个xml文件都是由节点组成的，在二进制xml中，自命名空间开始才是xml的具体节点，而每个节点都是由节点头和节点类型扩展构成，下面看下节点头的定义：</p>
+<figure class="highlight kotlin"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">internal</span> <span class="class"><span class="keyword">class</span> <span class="title">ResTreeNodeHeader</span></span>() &#123;</span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * header</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">lateinit</span> <span class="keyword">var</span> header: ResChunkHeader</span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * 该标签在原文件中开始出现的行号</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">var</span> lineNumber: <span class="built_in">Int</span> = <span class="number">2</span></span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * 该标签的注释在字符串资源池中的位置，一般该值不会出现在资源池中</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">var</span> comment: <span class="built_in">Int</span> = <span class="number">-1</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>节点头16字节，包括chunk头和自定义的两个变量，其中自定义的行号和注释索引目前看来没有什么用，当然如果是反编译的话行号还是有用的。下面从命名空间开始，来看下每种节点的具体结构。</p>
+<h2 id="命名空间"><a href="#命名空间" class="headerlink" title="命名空间"></a>命名空间</h2><p>在需要编译为二进制的xml文件中，除了自定义xml文件有可能没有命名空间，其他的所有文件都存在命名空间。命名空间有可能有多个，像在有自定义属性的xml文件中，会需要加一个命名空间，xml文件节点都是嵌套的，命名空间是第一个节点，同样也是最后一个节点，前后呼应，开始和结束节点结构完全相同，只是chunk类型不同。</p>
+<p>命名空间开始节点类型是<code>RES_XML_START_NAMESPACE_TYPE</code>，结束类型是<code>RES_XML_END_NAMESPACE_TYPE</code>，除去节点头，后面是命名空间扩展，其定义如下：</p>
+<figure class="highlight kotlin"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">internal</span> <span class="class"><span class="keyword">class</span> <span class="title">NamespaceExt</span></span>() &#123;</span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * namespace前缀在字符串池中的位置, like android in xmlns:android="the URI"</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">var</span> prefix: <span class="built_in">Int</span> = <span class="number">0</span></span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * index of namespace' URI in string pool</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">var</span> uri: <span class="built_in">Int</span> = <span class="number">0</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>我们编写xml文件时，命名空间都是由两部分组成：前缀和URI，下面以一个实际的布局文件来说明：</p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br></pre></td><td class="code"><pre><span class="line">&lt;?xml version="1.0" encoding="utf-8"?&gt;</span><br><span class="line"><span class="tag">&lt;<span class="name">android.support.constraint.ConstraintLayout</span></span></span><br><span class="line"><span class="tag">    <span class="attr">xmlns:android</span>=<span class="string">"http://schemas.android.com/apk/res/android"</span></span></span><br><span class="line"><span class="tag">    <span class="attr">xmlns:app</span>=<span class="string">"http://schemas.android.com/apk/res-auto"</span></span></span><br><span class="line"><span class="tag">    <span class="attr">xmlns:tools</span>=<span class="string">"http://schemas.android.com/tools"</span></span></span><br><span class="line"><span class="tag">    <span class="attr">android:id</span>=<span class="string">"@+id/container"</span></span></span><br><span class="line"><span class="tag">    <span class="attr">android:layout_width</span>=<span class="string">"match_parent"</span></span></span><br><span class="line"><span class="tag">    <span class="attr">android:layout_height</span>=<span class="string">"match_parent"</span></span></span><br><span class="line"><span class="tag">    <span class="attr">tools:context</span>=<span class="string">".MainActivity"</span>&gt;</span></span><br><span class="line"></span><br><span class="line">    <span class="tag">&lt;<span class="name">TextView</span></span></span><br><span class="line"><span class="tag">        <span class="attr">android:id</span>=<span class="string">"@+id/message"</span></span></span><br><span class="line"><span class="tag">        <span class="attr">android:layout_width</span>=<span class="string">"wrap_content"</span></span></span><br><span class="line"><span class="tag">        <span class="attr">android:layout_height</span>=<span class="string">"wrap_content"</span></span></span><br><span class="line"><span class="tag">        <span class="attr">android:layout_marginLeft</span>=<span class="string">"@dimen/activity_horizontal_margin"</span></span></span><br><span class="line"><span class="tag">        <span class="attr">android:layout_marginStart</span>=<span class="string">"@dimen/activity_horizontal_margin"</span></span></span><br><span class="line"><span class="tag">        <span class="attr">android:layout_marginTop</span>=<span class="string">"@dimen/activity_vertical_margin"</span></span></span><br><span class="line"><span class="tag">        <span class="attr">tools:text</span>=<span class="string">"@string/title_home"</span></span></span><br><span class="line"><span class="tag">        <span class="attr">app:layout_constraintLeft_toLeftOf</span>=<span class="string">"parent"</span></span></span><br><span class="line"><span class="tag">        <span class="attr">app:layout_constraintTop_toTopOf</span>=<span class="string">"parent"</span>/&gt;</span></span><br><span class="line"></span><br><span class="line">    <span class="tag">&lt;<span class="name">android.support.design.widget.BottomNavigationView</span></span></span><br><span class="line"><span class="tag">        <span class="attr">android:id</span>=<span class="string">"@+id/navigation"</span></span></span><br><span class="line"><span class="tag">        <span class="attr">android:layout_width</span>=<span class="string">"0dp"</span></span></span><br><span class="line"><span class="tag">        <span class="attr">android:layout_height</span>=<span class="string">"wrap_content"</span></span></span><br><span class="line"><span class="tag">        <span class="attr">android:layout_marginEnd</span>=<span class="string">"0dp"</span></span></span><br><span class="line"><span class="tag">        <span class="attr">android:layout_marginStart</span>=<span class="string">"0dp"</span></span></span><br><span class="line"><span class="tag">        <span class="attr">android:background</span>=<span class="string">"?android:attr/windowBackground"</span></span></span><br><span class="line"><span class="tag">        <span class="attr">app:layout_constraintBottom_toBottomOf</span>=<span class="string">"parent"</span></span></span><br><span class="line"><span class="tag">        <span class="attr">app:layout_constraintLeft_toLeftOf</span>=<span class="string">"parent"</span></span></span><br><span class="line"><span class="tag">        <span class="attr">app:layout_constraintRight_toRightOf</span>=<span class="string">"parent"</span></span></span><br><span class="line"><span class="tag">        <span class="attr">app:menu</span>=<span class="string">"@menu/navigation"</span>/&gt;</span></span><br><span class="line"></span><br><span class="line"><span class="tag">&lt;/<span class="name">android.support.constraint.ConstraintLayout</span>&gt;</span></span><br></pre></td></tr></table></figure>
+<p>一般情况下编写的xml文件，只有一个命名空间就是上面代码中的第一个，但有时也会用到其他的命名空间，在上面的布局文件中其他两个比较常用的也都有了。</p>
+<ul>
+<li><code>android</code>：系统属性的前缀，表明当前属性是系统定义的，有固定的id；</li>
+<li><code>app</code>：自定义属性的前缀，像<code>app:menu</code>，当然这个前缀完全可以换个字符串，自定义属性id的第一个字节是<code>0x7f</code>；</li>
+<li><code>tools</code>：简单来说就是在设计及编译阶段，提供一些特定功能，不影响实际打包及应用运行时的功能，像上面的<code>tools:text</code>可以在预览时显示文字，但实际运行时却没有；<code>tools:context</code>表明当前布局文件和哪个activity关联，在预览及编写布局时会提供帮助。当然还有很多其他属性，在<a href="https://developer.android.com/studio/write/tool-attributes" target="_blank" rel="noopener">官方文档</a>中有详细介绍。</li>
+</ul>
+<h2 id="元素节点"><a href="#元素节点" class="headerlink" title="元素节点"></a>元素节点</h2><p>命名空间之后就是具体的元素节点了，元素节点开始类型是<code>RES_XML_START_ELEMENT_TYPE</code>，每个元素都有多个属性，就像上面布局文件的每一个<code>View</code>，所以元素节点有节点头、属性扩展和属性数组构成，属性扩展定义如下：</p>
+<figure class="highlight kotlin"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">internal</span> <span class="class"><span class="keyword">class</span> <span class="title">AttrExt</span></span>() &#123;</span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * 该节点的命名空间在字符串池中的索引，一般没有, 4 bytes</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">var</span> ns = <span class="number">-1</span></span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * 该节点的名称在字符串池中的索引, 4 bytes</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">var</span> name = <span class="number">0</span></span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * 2 bytes, 该node的属性偏移</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">var</span> attributeStart = <span class="number">0</span></span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * 2 bytes，该node的每个属性大小</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">var</span> attributeSize = <span class="number">0</span></span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * 2 bytes，该节点属性数量</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">var</span> attributeCount = <span class="number">0</span></span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * 2 bytes，id属性索引，从1开始，0表示没有，一般为0</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">var</span> idIndex = <span class="number">0</span></span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * 2 bytes, class属性索引，从1开始，0表示没有，一般为0</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">var</span> classIndex = <span class="number">0</span></span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * 2 bytes, style属性索引，从1开始，0表示没有，一般为0</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">var</span> styleIndex = <span class="number">0</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>属性扩展共20字节，主要确定了当前元素的名称在字符串池中的索引以及属性的数量，其他变量暂时没有什么作用，基本都是固定的，像属性偏移位置为20，属性大小为20等。后面紧接着是属性数组，大小就是属性扩展中定义的数量，属性具体定义如下：</p>
+<figure class="highlight kotlin"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">internal</span> <span class="class"><span class="keyword">class</span> <span class="title">Attribute</span></span>() &#123;</span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * 该属性的命名空间在字符串池中的索引，一般没有, 4 bytes</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">var</span> ns = <span class="number">-1</span></span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * 该属性的名称在字符串池中的索引, 4 bytes</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">var</span> name = <span class="number">0</span></span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * 该属性的值在字符串池中的索引, 4 bytes</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">var</span> rawValue = <span class="number">0</span></span><br><span class="line"></span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * 解析之后的数据</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">lateinit</span> <span class="keyword">var</span> typedValue: ResValue</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">internal</span> <span class="class"><span class="keyword">class</span> <span class="title">ResValue</span></span>() &#123;</span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * 该类字节数, 2 bytes</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">var</span> size = <span class="number">0</span></span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * 0, 1 byte</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">var</span> res0 = <span class="number">0</span></span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * 资源数据类型, 1 byte</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">var</span> dataType = <span class="number">0</span></span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * 资源值或资源id，值或值在字符串池中的索引, 4 bytes</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">var</span> <span class="keyword">data</span> = <span class="number">0</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>属性共20字节，定义了当前属性名称在字符串池中的索引，具体的值一般在<code>ResValue</code>中确定，<code>ResValue</code>和<code>resources.arsc</code>中资源项值定义时相同的，所以要修改的地方也是同样的，即<code>ResValue.data</code>。</p>
+<p>无论元素是否有嵌套，总是会有与前面开始相呼应的结束数据块，在元素节点结束时，chunk类型是<code>RES_XML_END_ELEMENT_TYPE</code>，该数据块由节点头和元素结束扩展构成，具体定义如下：</p>
+<figure class="highlight kotlin"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">EndElementExt</span></span>() &#123;</span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * 该节点的命名空间在字符串池中的索引，一般没有, 4 bytes</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">var</span> ns = <span class="number">-1</span></span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * 该节点的名称在字符串池中的索引, 4 bytes</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">var</span> name = <span class="number">0</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>8个字节，很简单，主要定义了结束元素的名称在字符串池中的索引。到此为止，在一开始的表中显示的结构都解析完了，但实际上还有一种元素节点类型没有解析，当然这种类型也很少出现，就是类似下面这种：</p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">item</span>&gt;</span>hello world<span class="tag">&lt;<span class="name">item</span>/&gt;</span></span><br></pre></td></tr></table></figure>
+<p>这种没有属性，只有一个值的元素节点，在<code>values</code>文件夹下的xml中很常见，但<code>values</code>下的xml并不会被编译为二进制文件，所以自定义的xml中有可能有这种节点。而上面的各种数据结构都没有定义，这种元素节点有个专门的数据结构代替属性数组部分：</p>
+<figure class="highlight kotlin"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">internal</span> <span class="class"><span class="keyword">class</span> <span class="title">CDataExt</span></span>() &#123;</span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * the raw data index</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">var</span> <span class="keyword">data</span> = <span class="number">-1</span></span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * 解析后的数据</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">lateinit</span> <span class="keyword">var</span> typedData: ResValue</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>这种节点属于<code>CData</code>节点，12字节，同样用一个<code>ResValue</code>来表示具体的数据，所以如果是这种节点，还要修改<code>ResValue.data</code>。</p>
+<h2 id="小结"><a href="#小结" class="headerlink" title="小结"></a>小结</h2><p>二进制xml文件结构相对于<code>resources.arsc</code>简单多了，尤其是个节点都是前后对应的，整体解析过程如下：</p>
+<figure class="highlight kotlin"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">override</span> <span class="function"><span class="keyword">fun</span> <span class="title">parse</span><span class="params">()</span></span>: <span class="built_in">Boolean</span> &#123;</span><br><span class="line">    <span class="keyword">val</span> xmlHeader = ResChunkHeader(mInput).takeIf &#123;</span><br><span class="line">        it.type == ResChunkHeader.RES_XML_TYPE</span><br><span class="line">    &#125;?.apply &#123; println(<span class="keyword">this</span>) &#125;</span><br><span class="line">    checkNotNull(xmlHeader)</span><br><span class="line">    <span class="comment">// 字符串池，xml中用的的字符串</span></span><br><span class="line">    parseStringPool(stringPool)</span><br><span class="line">    <span class="keyword">var</span> chunkHeader = ResChunkHeader(mInput)</span><br><span class="line">    <span class="keyword">if</span> (chunkHeader.type == ResChunkHeader.RES_XML_RESOURCE_MAP_TYPE) &#123;<span class="comment">// 该部分并不是必须存在的</span></span><br><span class="line">        <span class="comment">// 资源id，属于xml中具有资源id的属性，像系统属性layout_width等和自定义属性，系统属性id值固定</span></span><br><span class="line">        <span class="comment">// 每个id有4字节</span></span><br><span class="line">        mInput.skipBytes(chunkHeader.size - chunkHeader.headSize)</span><br><span class="line">        chunkHeader = ResChunkHeader(mInput)</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">var</span> nodeHeader = ResTreeNodeHeader(mInput, chunkHeader)</span><br><span class="line">    <span class="comment">// 开始解析namespace，该部分是前后对应的，start with this namespace, then end with this too.</span></span><br><span class="line">    <span class="keyword">while</span> (nodeHeader.header.type == ResChunkHeader.RES_XML_START_NAMESPACE_TYPE) &#123;</span><br><span class="line">        <span class="keyword">val</span> nsExt = NamespaceExt(mInput)</span><br><span class="line">        <span class="comment">// namespace有可能并不止一个</span></span><br><span class="line">        nodeHeader = ResTreeNodeHeader(mInput)</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">// 开始解析具体node，同样每个node都是前后对应的，有开始就有结束，并且node里面可以包含node</span></span><br><span class="line">    <span class="keyword">while</span> (nodeHeader.header.type == ResChunkHeader.RES_XML_START_ELEMENT_TYPE) &#123;</span><br><span class="line">        <span class="keyword">val</span> attrExt = AttrExt(mInput)</span><br><span class="line">        <span class="keyword">for</span> (i <span class="keyword">in</span> <span class="number">0</span> until attrExt.attributeCount) &#123;</span><br><span class="line">            <span class="keyword">val</span> attr = Attribute(mInput)</span><br><span class="line">        &#125;</span><br><span class="line">        nodeHeader = ResTreeNodeHeader(mInput)</span><br><span class="line">        <span class="comment">// 在没有attribute时，如果该node仅仅是一项数据，则是CDATA类型</span></span><br><span class="line">        <span class="comment">// 在android资源打包过程中，values类型的xml文件是不会被编译为二进制xml文件的，其他类型的xml文件没有这</span></span><br><span class="line">        <span class="comment">// 种格式的节点，所以正常情况下是不会有这种类型的数据，但自定义的xml文件就有可能包含了。</span></span><br><span class="line">        <span class="keyword">if</span> (nodeHeader.header.type == ResChunkHeader.RES_XML_CDATA_TYPE) &#123;</span><br><span class="line">            <span class="keyword">val</span> cDataExt = CDataExt(mInput)</span><br><span class="line">            nodeHeader = ResTreeNodeHeader(mInput)</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="comment">// node结束有可能并不止一个</span></span><br><span class="line">        <span class="keyword">while</span> (nodeHeader.header.type == ResChunkHeader.RES_XML_END_ELEMENT_TYPE) &#123;</span><br><span class="line">            <span class="keyword">val</span> endElementExt = EndElementExt(mInput)</span><br><span class="line">            <span class="keyword">if</span> (mInput.filePointer == xmlHeader!!.size.toLong()) &#123;</span><br><span class="line">                mInput.close()</span><br><span class="line">                <span class="keyword">return</span> <span class="literal">true</span></span><br><span class="line">            &#125;</span><br><span class="line">            nodeHeader = ResTreeNodeHeader(mInput)</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">// 解析与前面对应的namespace结束</span></span><br><span class="line">    <span class="keyword">while</span> (nodeHeader.header.type == ResChunkHeader.RES_XML_END_NAMESPACE_TYPE) &#123;</span><br><span class="line">        <span class="keyword">val</span> nsExt = NamespaceExt(mInput)</span><br><span class="line">        <span class="keyword">if</span> (mInput.filePointer == xmlHeader!!.size.toLong()) &#123;</span><br><span class="line">            <span class="keyword">break</span></span><br><span class="line">        &#125;</span><br><span class="line">        <span class="comment">// namespace有可能并不止一个</span></span><br><span class="line">        nodeHeader = ResTreeNodeHeader(mInput)</span><br><span class="line">    &#125;</span><br><span class="line">    mInput.close()</span><br><span class="line">    <span class="keyword">return</span> <span class="literal">true</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>需要修改package id的地方有3个：资源id数据块中的每一个自定义id、元素节点属性值、<code>CData</code>节点值。</p>
+<p>通过<a href="https://ymlion.com/post/resources-arsc-parse/">上一篇</a>和这一篇，AAPT工具生成的二进制文件<code>resources.arsc</code>、<code>AndroidManifest.xml</code>和xml资源文件就都能修改package id了。AAPT工具还生成了另外两个文本文件<code>R.txt</code>和<code>R.java</code>，这两个就按行改就行了，不需要任何解析。到此，宿主和插件的资源冲突及资源共享问题基本算是可以解决了，具体实现代码都在<a href="https://github.com/YMlion/android-res-parser" target="_blank" rel="noopener">android-res-parser库</a>。</p>
+
+      
+    </div>
+    
+    
+    
+
+    
+
+    
+
+    
+
+    <footer class="post-footer">
+      
+        <div class="post-tags">
+          
+            <a href="/tags/Android/" rel="tag"># Android</a>
+          
+            <a href="/tags/插件化/" rel="tag"># 插件化</a>
+          
+            <a href="/tags/资源打包/" rel="tag"># 资源打包</a>
+          
+        </div>
+      
+
+      
+      
+      
+
+      
+        <div class="post-nav">
+          <div class="post-nav-next post-nav-item">
+            
+              <a href="/post/resources-arsc-parse/" rel="next" title="resources.arsc解析">
+                <i class="fa fa-chevron-left"></i> resources.arsc解析
+              </a>
+            
+          </div>
+
+          <span class="post-nav-divider"></span>
+
+          <div class="post-nav-prev post-nav-item">
+            
+          </div>
+        </div>
+      
+
+      
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+
+    <div class="post-spread">
+      
+    </div>
+  </div>
+
+
+          </div>
+          
+
+
+          
+
+  
+
+
+
+        </div>
+        
+          
+  
+  <div class="sidebar-toggle">
+    <div class="sidebar-toggle-line-wrap">
+      <span class="sidebar-toggle-line sidebar-toggle-line-first"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-middle"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-last"></span>
+    </div>
+  </div>
+
+  <aside id="sidebar" class="sidebar">
+    
+    <div class="sidebar-inner">
+
+      
+
+      
+        <ul class="sidebar-nav motion-element">
+          <li class="sidebar-nav-toc sidebar-nav-active" data-target="post-toc-wrap">
+            文章目录
+          </li>
+          <li class="sidebar-nav-overview" data-target="site-overview-wrap">
+            站点概览
+          </li>
+        </ul>
+      
+
+      <section class="site-overview-wrap sidebar-panel">
+        <div class="site-overview">
+          <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+            
+              <p class="site-author-name" itemprop="name">YMlion</p>
+              <p class="site-description motion-element" itemprop="description">业精于勤，荒于嬉；行成于思，毁于随。</p>
+          </div>
+
+          <nav class="site-state motion-element">
+
+            
+              <div class="site-state-item site-state-posts">
+              
+                <a href="/archives/">
+              
+                  <span class="site-state-item-count">12</span>
+                  <span class="site-state-item-name">日志</span>
+                </a>
+              </div>
+            
+
+            
+              
+              
+              <div class="site-state-item site-state-categories">
+                <a href="/categories/index.html">
+                  <span class="site-state-item-count">3</span>
+                  <span class="site-state-item-name">分类</span>
+                </a>
+              </div>
+            
+
+            
+              
+              
+              <div class="site-state-item site-state-tags">
+                <a href="/tags/index.html">
+                  <span class="site-state-item-count">11</span>
+                  <span class="site-state-item-name">标签</span>
+                </a>
+              </div>
+            
+
+          </nav>
+
+          
+            <div class="feed-link motion-element">
+              <a href="/atom.xml" rel="alternate">
+                <i class="fa fa-rss"></i>
+                RSS
+              </a>
+            </div>
+          
+
+          <div class="links-of-author motion-element">
+            
+              
+                <span class="links-of-author-item">
+                  <a href="https://github.com/YMlion" target="_blank" title="GitHub">
+                    
+                      <i class="fa fa-fw fa-github"></i>GitHub</a>
+                </span>
+              
+                <span class="links-of-author-item">
+                  <a href="mailto:lmion.yao@gmail.com" target="_blank" title="E-Mail">
+                    
+                      <i class="fa fa-fw fa-envelope"></i>E-Mail</a>
+                </span>
+              
+            
+          </div>
+
+          
+          
+
+          
+          
+
+          
+
+        </div>
+      </section>
+
+      
+      <!--noindex-->
+        <section class="post-toc-wrap motion-element sidebar-panel sidebar-panel-active">
+          <div class="post-toc">
+
+            
+              
+            
+
+            
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#文件结构"><span class="nav-number">1.</span> <span class="nav-text">文件结构</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#命名空间"><span class="nav-number">2.</span> <span class="nav-text">命名空间</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#元素节点"><span class="nav-number">3.</span> <span class="nav-text">元素节点</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#小结"><span class="nav-number">4.</span> <span class="nav-text">小结</span></a></li></ol></div>
+            
+
+          </div>
+        </section>
+      <!--/noindex-->
+      
+
+      
+
+    </div>
+  </aside>
+
+
+        
+      </div>
+    </main>
+
+    <footer id="footer" class="footer">
+      <div class="footer-inner">
+        <div class="copyright">&copy; 2015 &mdash; <span itemprop="copyrightYear">2018</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">YMlion</span>
+
+  
+</div>
+
+
+  <div class="powered-by">由 <a class="theme-link" target="_blank" href="https://hexo.io">Hexo</a> 强力驱动</div>
+
+
+
+  <span class="post-meta-divider">|</span>
+
+
+
+  <div class="theme-info">主题 &mdash; <a class="theme-link" target="_blank" href="https://github.com/iissnan/hexo-theme-next">NexT.Pisces</a></div>
+
+
+
+
+        
+<div class="busuanzi-count">
+  <script async src="https://dn-lbstatics.qbox.me/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+  
+    <span class="site-uv">
+      <i class="fa fa-user"></i>
+      <span class="busuanzi-value" id="busuanzi_value_site_uv"></span>
+      
+    </span>
+  
+
+  
+    <span class="site-pv">
+      <i class="fa fa-eye"></i>
+      <span class="busuanzi-value" id="busuanzi_value_site_pv"></span>
+      
+    </span>
+  
+</div>
+
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+
+    
+      <div class="back-to-top">
+        <i class="fa fa-arrow-up"></i>
+        
+      </div>
+    
+
+    
+
+  </div>
+
+  
+
+<script type="text/javascript">
+  if (Object.prototype.toString.call(window.Promise) !== '[object Function]') {
+    window.Promise = null;
+  }
+</script>
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+    <script type="text/javascript" src="/lib/jquery/index.js?v=2.1.3"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/fastclick/lib/fastclick.min.js?v=1.0.6"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/jquery_lazyload/jquery.lazyload.js?v=1.9.7"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/fancybox/source/jquery.fancybox.pack.js?v=2.1.5"></script>
+  
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/utils.js?v=5.1.3"></script>
+
+  <script type="text/javascript" src="/js/src/motion.js?v=5.1.3"></script>
+
+
+
+  
+  
+
+
+  <script type="text/javascript" src="/js/src/affix.js?v=5.1.3"></script>
+
+  <script type="text/javascript" src="/js/src/schemes/pisces.js?v=5.1.3"></script>
+
+
+
+  
+  <script type="text/javascript" src="/js/src/scrollspy.js?v=5.1.3"></script>
+<script type="text/javascript" src="/js/src/post-details.js?v=5.1.3"></script>
+
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/bootstrap.js?v=5.1.3"></script>
+
+
+
+  
+
+
+  
+
+
+
+
+	
+
+
+
+
+
+  
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+
+  
+
+  
+
+  
+
+  
+  
+
+  
+
+  
+
+  
+
+</body>
+</html>

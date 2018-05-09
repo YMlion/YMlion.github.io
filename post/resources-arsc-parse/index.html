@@ -91,7 +91,7 @@
 <meta property="og:locale" content="zh-Hans">
 <meta property="og:image" content="https://ymlion.com/post/resources-arsc-parse/resources_arsc_detail.png">
 <meta property="og:image" content="https://ymlion.com/post/resources-arsc-parse/resources_arsc.png">
-<meta property="og:updated_time" content="2018-05-08T09:00:01.982Z">
+<meta property="og:updated_time" content="2018-05-09T11:29:58.819Z">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="resources.arsc解析">
 <meta name="twitter:description" content="Android插件化实现过程中，同一进程下插件和宿主资源共享和冲突问题像一座山挡住了路，无法避开。在Android中，所有资源都是通过资源id进行引用，因此，要越过这座山，简单可行的解决方法就是修改资源id。资源id是一个int值，四字节，格式是0xPPTTEEEE：  PP：package id，第一个字节，范围在[0x01, 0x7f]，系统应用为0x01，第三方应用为0x7f； TT：typ">
@@ -448,7 +448,7 @@
 <p>解析逻辑很清晰，那么修改package id也就很简单了，找到对应的位置修改就可以了，就不再展示代码了。</p>
 <h2 id="小结"><a href="#小结" class="headerlink" title="小结"></a>小结</h2><p>资源索引表是所有二进制资源文件中最复杂的一个，主要是在package数据块里面稍显复杂的逻辑关系，这也是理清整个结构的关键点。另外资源索引表同样加入了第三方库中的资源项，这也同样加大了复杂度。</p>
 <p>插件化时，修改的是插件的资源索引表，为了资源冲突和共享，所以更深一点思考，除了修改资源id，还需要把宿主和插件相同的资源在插件中去除，这样就更好了。换一个角度思考，资源索引表中有所有资源文件的字符串，因此就资源混淆角度来说，替换资源文件对应的字符串为混淆后的字符串，并修改每个资源文件的路径和名称，重新打包则就实现了资源混淆，这也是<a href="https://github.com/shwenzhang/AndResGuard" target="_blank" rel="noopener">AndResGuard</a>的基本原理。</p>
-<p>下一篇分析二进制xml文件的结构并修改资源id，具体实现代码都在<a href="https://github.com/YMlion/android-res-parser" target="_blank" rel="noopener">android-res-parser库</a>。</p>
+<p><a href="https://ymlion.com/post/res-xml-parse/">下一篇</a>分析二进制xml文件的结构并修改资源id，具体实现代码都在<a href="https://github.com/YMlion/android-res-parser" target="_blank" rel="noopener">android-res-parser库</a>。</p>
 
       
     </div>
@@ -492,6 +492,10 @@
           <span class="post-nav-divider"></span>
 
           <div class="post-nav-prev post-nav-item">
+            
+              <a href="/post/res-xml-parse/" rel="prev" title="Android二进制xml资源文件解析">
+                Android二进制xml资源文件解析 <i class="fa fa-chevron-right"></i>
+              </a>
             
           </div>
         </div>
@@ -568,7 +572,7 @@
               
                 <a href="/archives/">
               
-                  <span class="site-state-item-count">11</span>
+                  <span class="site-state-item-count">12</span>
                   <span class="site-state-item-name">日志</span>
                 </a>
               </div>
