@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+
+
+
+  
+
+
+<html class="theme-next pisces use-motion" lang="zh-Hans">
+<head>
+  <meta charset="UTF-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
+<meta name="theme-color" content="#222">
+
+
+
+
+
+
+
+
+
+<meta http-equiv="Cache-Control" content="no-transform" />
+<meta http-equiv="Cache-Control" content="no-siteapp" />
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+  <link href="/lib/fancybox/source/jquery.fancybox.css?v=2.1.5" rel="stylesheet" type="text/css" />
+
+
+
+
+
+
+
+<link href="/lib/font-awesome/css/font-awesome.min.css?v=4.6.2" rel="stylesheet" type="text/css" />
+
+<link href="/css/main.css?v=5.1.3" rel="stylesheet" type="text/css" />
+
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=5.1.3">
+
+
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=5.1.3">
+
+
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=5.1.3">
+
+
+  <link rel="mask-icon" href="/images/logo.svg?v=5.1.3" color="#222">
+
+
+
+
+
+  <meta name="keywords" content="Android,热修复,Robust," />
+
+
+
+
+
+  <link rel="alternate" href="/atom.xml" title="YMlion's Blog" type="application/atom+xml" />
+
+
+
+
+
+
+<meta name="description" content="Robust在使用过程中有很多坑，一不小心就会掉入坑中，半天爬不出来。">
+<meta name="keywords" content="Android,热修复,Robust">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Robust填坑">
+<meta property="og:url" content="https://ymlion.com/post/robust-issues/index.html">
+<meta property="og:site_name" content="YMlion&#39;s Blog">
+<meta property="og:description" content="Robust在使用过程中有很多坑，一不小心就会掉入坑中，半天爬不出来。">
+<meta property="og:locale" content="zh-Hans">
+<meta property="og:image" content="https://developer.android.com/studio/images/write/desugar_2x.png">
+<meta property="og:updated_time" content="2018-09-28T11:08:47.359Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Robust填坑">
+<meta name="twitter:description" content="Robust在使用过程中有很多坑，一不小心就会掉入坑中，半天爬不出来。">
+<meta name="twitter:image" content="https://developer.android.com/studio/images/write/desugar_2x.png">
+
+
+
+<script type="text/javascript" id="hexo.configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Pisces',
+    version: '5.1.3',
+    sidebar: {"position":"left","display":"post","offset":12,"b2t":false,"scrollpercent":false,"onmobile":false},
+    fancybox: true,
+    tabs: true,
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    duoshuo: {
+      userId: '0',
+      author: '博主'
+    },
+    algolia: {
+      applicationID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    }
+  };
+</script>
+
+
+
+  <link rel="canonical" href="https://ymlion.com/post/robust-issues/"/>
+
+
+
+
+
+  <title>Robust填坑 | YMlion's Blog</title>
+  
+
+
+
+
+
+  <script type="text/javascript">
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?93ccb82075a783cf82b4e98bec7097e3";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" lang="zh-Hans">
+
+  
+  
+    
+  
+
+  <div class="container sidebar-position-left page-post-detail">
+    <div class="headband"></div>
+
+    <header id="header" class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-wrapper">
+  <div class="site-meta ">
+    
+
+    <div class="custom-logo-site-title">
+      <a href="/"  class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">YMlion's Blog</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+      
+        <p class="site-subtitle">写点什么</p>
+      
+  </div>
+
+  <div class="site-nav-toggle">
+    <button>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+    </button>
+  </div>
+</div>
+
+<nav class="site-nav">
+  
+
+  
+    <ul id="menu" class="menu">
+      
+        
+        <li class="menu-item menu-item-home">
+          <a href="/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-home"></i> <br />
+            
+            首页
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-tags">
+          <a href="/tags/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-tags"></i> <br />
+            
+            标签
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-categories">
+          <a href="/categories/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-th"></i> <br />
+            
+            分类
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-archives">
+          <a href="/archives/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-archive"></i> <br />
+            
+            归档
+          </a>
+        </li>
+      
+
+      
+    </ul>
+  
+
+  
+</nav>
+
+
+
+ </div>
+    </header>
+
+    <main id="main" class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          <div id="content" class="content">
+            
+
+  <div id="posts" class="posts-expand">
+    
+
+  
+
+  
+  
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="https://ymlion.com/post/robust-issues/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="YMlion">
+      <meta itemprop="description" content="">
+      <meta itemprop="image" content="/images/avatar.gif">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="YMlion's Blog">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">Robust填坑</h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">发表于</span>
+              
+              <time title="创建于" itemprop="dateCreated datePublished" datetime="2018-09-28T19:04:50+08:00">
+                2018-09-28
+              </time>
+            
+
+            
+
+            
+          </span>
+
+          
+            <span class="post-category" >
+            
+              <span class="post-meta-divider">|</span>
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">分类于</span>
+              
+              
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Android/" itemprop="url" rel="index">
+                    <span itemprop="name">Android</span>
+                  </a>
+                </span>
+
+                
+                
+                  ， 
+                
+              
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Android/热修复/" itemprop="url" rel="index">
+                    <span itemprop="name">热修复</span>
+                  </a>
+                </span>
+
+                
+                
+              
+            </span>
+          
+
+          
+            
+          
+
+          
+          
+
+          
+            <span class="post-meta-divider">|</span>
+            <span class="page-pv"><i class="fa fa-file-o"></i>
+            <span class="busuanzi-value" id="busuanzi_value_page_pv" ></span>
+            </span>
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        <p><a href="https://github.com/YMlion/Robust" target="_blank" rel="noopener">Robust</a>在使用过程中有很多坑，一不小心就会掉入坑中，半天爬不出来。</p>
+<a id="more"></a>
+<h2 id="依赖库版本"><a href="#依赖库版本" class="headerlink" title="依赖库版本"></a>依赖库版本</h2><p>坑有很多种，最容易忽略的是依赖库的版本。其中有几个比较重要的库，版本变化较大，不能轻易升级，包括<code>retrolambda</code>，<code>asm</code>，<code>javassist</code>，这几个库对于能否正常插桩、能否生成补丁包至关重要，这几个库升级后，有可能会出现比较大的问题，所以升级时要谨慎，出了问题仔细检查。当然还有最重要的一个<code>android-gradle-plugin</code>，这个可以升级，但是同样会出现一些问题，<code>robust</code>中使用的是<code>2.x</code>的版本，当升级之后会出现一些小问题，这都容易解决。目前来说，<code>retrolambda</code>升级肯定会出现问题，其他库升级出现的都是小问题，可以轻易解决。</p>
+<h2 id="lambda表达式"><a href="#lambda表达式" class="headerlink" title="lambda表达式"></a><code>lambda</code>表达式</h2><p>除了版本问题，目前来说比较重要的就是<code>lambda</code>表达式，<code>as3.x</code>已经推出很长时间了，<code>lambda</code>表达式也能支持了，按理说要抛弃掉<code>2.x</code>的版本以及<code>retrolambda</code>库了，但<code>Robust</code>并没有适配<code>as3.x</code>支持的<code>lambda</code>表达式及方法引用。<code>retrolambda</code>生成的<code>lambda</code>表达式是可以支持的，但也是仅限于<code>retrolambda-3.2.0</code>及以下版本。</p>
+<h3 id="lambda实现逻辑"><a href="#lambda实现逻辑" class="headerlink" title="lambda实现逻辑"></a><code>lambda</code>实现逻辑</h3><p><code>lambda</code>表达式具体实现逻辑，对于原生<code>java8</code>编译器、<code>as3.x</code>、<code>retrolambda</code>来说都是不同的，<code>as3.x</code>使用<code>desugar</code>对<code>.class</code>字节码进行转换，从而实现新语言功能。</p>
+<p><img src="https://developer.android.com/studio/images/write/desugar_2x.png" alt="采用 `desugar` 字节码转换的 Java 8 语言功能支持"></p>
+<p><code>javac</code>编译<code>lambda</code>是在运行时去解析，而<code>dalvik</code>不支持<code>invokedynamic</code>命令，所以就要将<code>.class</code>字节码编译为<code>dalvik</code>可以识别的字节码文件。<code>.class</code>文件通过<code>dex</code>优化合并为<code>.dex</code>文件时，<code>lambda</code>表达式会被进一步优化，所以<code>lambda</code>表达式处理起来稍微麻烦一些。</p>
+<h3 id="lambda表达式编译情景"><a href="#lambda表达式编译情景" class="headerlink" title="lambda表达式编译情景"></a><code>lambda</code>表达式编译情景</h3><p><code>as3.x</code>编译<code>lambda</code>表达式时，会生成一个单独的接口实现类，而具体的实现则是放在了外部类中，生成对应的一个实现方法，接口方法中调用外部类的实现方法，至于生成的实现方法是不是静态的，可具体情况具体分析。另外，这种情况可也能会在<code>dex</code>优化中出现不同结果，有可能被内联，有可能继续保留外部的实现方法，具体看下面的几种情况。</p>
+<p>通过对<code>lambda</code>表达式代码的表面分析，可以简单得出4种情景：是否有外部类的方法的调用和是否有外部变量的引用。</p>
+<p>首先看最简单的一种情况，就是既没有外部方法调用也没有外部变量引用，纯粹是自己的逻辑，此时的<code>lambda</code>表达式会生成一个单独的类，并在类内生成一个静态实例，访问时就直接使用该静态实例调用其实现方法。这种情况下，和外部类没有任何关系，所以<code>dex</code>优化时会把在外部类中的实现方法逻辑重新移动到接口实现类中。</p>
+<p>第二种是只有外部变量的引用，此时和第一种情况没有太大区别，唯一的区别就是此时的生成的<code>lambda</code>类没有静态实例，所需要的外部变量通过构造方法传递进来，在其方法实现中就会引用传递过来的成员变量，所以这种情况下也会被<code>dex</code>优化掉。</p>
+<p>第三种就是只有外部类的方法调用，这种情况和第二种类似，因为有方法调用，所以也会保存外部类的引用，但在这种情况下，如果说调用的外部类方法不是很复杂，则有可能在最终生成的<code>.dex</code>中，会被优化掉。</p>
+<p>第四种就是既有外部类的方法调用，也有外部变量的引用，这种情况下稍微复杂，所以<code>dex</code>优化时不会被优化掉，就还是正常调用外部类的实现方法。</p>
+<blockquote>
+<p>除了第一种，其他三种情况下，因为有外部类或者变量的引用，在<code>android</code>开发中很容易引起内存泄漏，尤其是<code>Context</code>、<code>View</code>等对象的外部引用，因此这种情况下慎用<code>lambda</code>表达式。</p>
+</blockquote>
+<h3 id="lambda表达式修复"><a href="#lambda表达式修复" class="headerlink" title="lambda表达式修复"></a><code>lambda</code>表达式修复</h3><p>由于编译时生成的字节码文件，<code>lambda</code>表达式的实现是在外部类中，而目前<code>Robust</code>查找<code>RobustModify.modify()</code>的调用是在接口实现类的方法中，因此<code>Robust</code>找不到<code>lambda</code>表达式是否有修复。<code>Robust</code>实现的是<code>retrolambda3.2.0</code>中<code>lambda</code>表达式的修复。</p>
+<p>在<code>Robust</code>中，主要是修改<code>ReadAnnotation.scanClassForModifyMethod()</code>方法中<code>lambda</code>表达式是否需要修复的逻辑。首先定义两个变量来判断是否修复及是否有外部方法调用：</p>
+<figure class="highlight groovy"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 当前方法是否需要修复</span></span><br><span class="line"><span class="keyword">def</span> isPatch = <span class="literal">false</span></span><br><span class="line"><span class="comment">// 当前方法是否有外部类的方法调用</span></span><br><span class="line"><span class="keyword">def</span> isOutMethodCall = <span class="literal">false</span></span><br></pre></td></tr></table></figure>
+<p>判断是否是<code>lambda</code>表达式就是很简单地判断了方法名是否含有<code>lambda$</code>：</p>
+<figure class="highlight groovy"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">void</span> edit(MethodCall m) <span class="keyword">throws</span> CannotCompileException &#123;</span><br><span class="line">    <span class="keyword">if</span> (isPatch) &#123;</span><br><span class="line">        <span class="keyword">return</span></span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">try</span> &#123;</span><br><span class="line">        <span class="keyword">def</span> callMethod = m.method</span><br><span class="line">        <span class="keyword">if</span> (Constants.LAMBDA_MODIFY == callMethod.declaringClass.name) &#123;<span class="comment">// 这种情况是retrolambda的判断</span></span><br><span class="line">            isPatch = <span class="literal">true</span></span><br><span class="line">            isAllMethodsPatch = <span class="literal">false</span></span><br><span class="line">            addPatchMethodAndModifiedClass(patchMethodSignureSet, method)</span><br><span class="line">        &#125; <span class="keyword">else</span> <span class="keyword">if</span> (m.methodName.contains(<span class="string">"lambda\$"</span>) &amp;&amp; m.methodName.endsWith(</span><br><span class="line">            callMethod.declaringClass.simpleName)) &#123;</span><br><span class="line">            callMethod.instrument(<span class="keyword">new</span> ExprEditor() &#123;</span><br><span class="line">                <span class="meta">@Override</span></span><br><span class="line">                <span class="keyword">void</span> edit(MethodCall mm) <span class="keyword">throws</span> CannotCompileException &#123;</span><br><span class="line">                    <span class="keyword">if</span> (Constants.LAMBDA_MODIFY == mm.method.declaringClass.name) &#123;</span><br><span class="line">                        isPatch = <span class="literal">true</span></span><br><span class="line">                    &#125; <span class="keyword">else</span> <span class="keyword">if</span> (m.method.declaringClass.name == mm.method.declaringClass.name) &#123;</span><br><span class="line">                        isOutMethodCall = <span class="literal">true</span></span><br><span class="line">                    &#125;</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;)</span><br><span class="line">            <span class="comment">// 此处省略具体修复逻辑</span></span><br><span class="line">        &#125;</span><br><span class="line">    &#125; <span class="keyword">catch</span> (Exception e) &#123;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>第一层<code>else if</code>中是<code>lambda</code>表达式是否修复的判断，前面说过在接口实现类中，只是去调用外部类的具体实现方法，因此当前接口实现类的方法中，只有一行调用代码，所以判断这个调用代码是否含有<code>lambda$</code>以及调用的方法是否是以外部类名结尾，因为编译生成的这个外部类的实现方法是以外部类名结尾。确定当前的方法是<code>lambda</code>表达式的具体实现之后，根据每次方法调用得出<code>isPatch</code>和<code>isOutMethodCall</code>两个变量的值。后面根据这两个值去执行不同情况下的修复逻辑：</p>
+<figure class="highlight groovy"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> (isPatch) &#123;</span><br><span class="line">    <span class="keyword">def</span> newMethod</span><br><span class="line">    <span class="keyword">if</span> (isOutMethodCall) &#123;</span><br><span class="line">        <span class="comment">// 修复代码中有外部类方法调用</span></span><br><span class="line">        <span class="keyword">if</span> (hasOutParams(method, callMethod)) &#123;</span><br><span class="line">            println <span class="string">"lambda fix : 1"</span></span><br><span class="line">            <span class="comment">// 外部变量引用，此时callMethod不会在dex优化中被优化掉</span></span><br><span class="line">            newAndReplaceMethod(callMethod, method, m)</span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">            <span class="comment">// 无外部变量引用，此时在dex优化时会被优化掉</span></span><br><span class="line">            <span class="comment">// 此时还有两种情况，一种是原来该方法中就有调用外部类的方法，另一种就是只在修复代码中有外部类方法调用</span></span><br><span class="line">            <span class="comment">// 但是无法判断这两种情况，因为当前的代码都是修复之后的代码编译而成</span></span><br><span class="line">            <span class="comment">//  lambda2FixList.add(method.declaringClass.name)</span></span><br><span class="line">            println <span class="string">"lambda fix : 2 "</span></span><br><span class="line">            newAndReplaceMethod(callMethod, method, m)</span><br><span class="line">        &#125;</span><br><span class="line">        newMethod = method</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        <span class="comment">// 修复代码无外部类方法调用</span></span><br><span class="line">        <span class="keyword">def</span> originalClass = method.getDeclaringClass()</span><br><span class="line">        <span class="keyword">if</span> (hasOutParams(method, callMethod)) &#123;</span><br><span class="line">            println <span class="string">"lambda fix : 3"</span></span><br><span class="line">            <span class="comment">// 有外部变量引用</span></span><br><span class="line">            <span class="comment">// 复制并创建一个新的方法，并替换掉当前调用的方法</span></span><br><span class="line">            newMethod = CtNewMethod.copy(callMethod,</span><br><span class="line">                method.getName() + <span class="string">"_temp"</span>, originalClass, <span class="literal">null</span>)</span><br><span class="line">            originalClass.addMethod(newMethod)</span><br><span class="line">            m.replace(<span class="string">"&#123; $&#123;newMethod.name&#125;(\$\$); &#125;"</span>)</span><br><span class="line">            newMethod = method</span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">            println <span class="string">"lambda fix : 4"</span></span><br><span class="line">            <span class="comment">// 仅是逻辑代码，不涉及外部方法和变量引用</span></span><br><span class="line">            <span class="comment">// 复制当前方法到原来的方法中，减少此次方法调用，直接复制会有问题，通过创建同名方法实现</span></span><br><span class="line">            originalClass.removeMethod(method)</span><br><span class="line">            newMethod = CtNewMethod.copy(callMethod,</span><br><span class="line">                method.getName(), originalClass, <span class="literal">null</span>)</span><br><span class="line">            originalClass.addMethod(newMethod)</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    isAllMethodsPatch = <span class="literal">false</span></span><br><span class="line">    addPatchMethodAndModifiedClass(patchMethodSignureSet,</span><br><span class="line">        newMethod)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>注释中解释地很清楚，总体就是根据前面<code>lambda</code>表达式编译的四种情况来实现的。这四种情况不同的实现方法也是反复摸索出来的，有替换方法、有生成新方法等等。其中抽出来的几个工具方法如下：</p>
+<figure class="highlight groovy"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * 在外部类中生成新的方法，代替编译时生成的方法</span></span><br><span class="line"><span class="comment"> *</span></span><br><span class="line"><span class="comment"> * <span class="doctag">@param</span> copyMethod 编译时生成的无插桩方法</span></span><br><span class="line"><span class="comment"> * <span class="doctag">@param</span> innerMethod 内部类方法，该方法去调用编译时生成的外部类方法，该方法就是需要修复的方法</span></span><br><span class="line"><span class="comment"> * <span class="doctag">@return</span> 在外部类中新生成的成员方法</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="keyword">static</span> CtMethod generateNewOutMethod(CtMethod copyMethod, CtMethod innerMethod) &#123;</span><br><span class="line">    <span class="keyword">if</span> (Config.methodMap.get(copyMethod.longName) != <span class="literal">null</span>) &#123;</span><br><span class="line">        Config.methodMap.remove(copyMethod.longName)</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">def</span> newMethod = CtNewMethod.copy(copyMethod,</span><br><span class="line">        innerMethod.getName() + <span class="string">"\$Proxy\$"</span> + Config.methodMap.get(innerMethod.longName).</span><br><span class="line">            intValue(),</span><br><span class="line">        copyMethod.declaringClass, <span class="literal">null</span>)</span><br><span class="line">    newMethod.setModifiers(Modifier.FINAL | Modifier.PUBLIC)</span><br><span class="line">    copyMethod.declaringClass.addMethod(newMethod)</span><br><span class="line">    <span class="keyword">return</span> newMethod</span><br><span class="line">&#125;</span><br><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * 在外部类中生成新的方法，代替编译时生成的方法</span></span><br><span class="line"><span class="comment"> *</span></span><br><span class="line"><span class="comment"> * <span class="doctag">@param</span> copyMethod 编译时生成的无插桩方法</span></span><br><span class="line"><span class="comment"> * <span class="doctag">@param</span> innerMethod 内部类方法，该方法去调用编译时生成的外部类方法，该方法就是需要修复的方法</span></span><br><span class="line"><span class="comment"> * <span class="doctag">@param</span> mc 无插桩方法调用</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="keyword">static</span> <span class="keyword">void</span> newAndReplaceMethod(CtMethod replacedMethod, CtMethod innerMethod, MethodCall mc) &#123;</span><br><span class="line">    <span class="keyword">def</span> newMethod = generateNewOutMethod(replacedMethod, innerMethod)</span><br><span class="line">    println <span class="string">"return type is "</span> + newMethod.returnType.name</span><br><span class="line">    <span class="comment">// 不能是静态的，应该使用调用者去调用</span></span><br><span class="line">    <span class="keyword">if</span> (newMethod.returnType.name == <span class="string">"void"</span>) &#123;</span><br><span class="line">        mc.replace(<span class="string">"&#123; \$0.$&#123;newMethod.name&#125;(\$\$); &#125;"</span>)</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        mc.replace(<span class="string">"&#123; \$_ = \$0.$&#123;newMethod.name&#125;(\$\$); &#125;"</span>)</span><br><span class="line">    &#125;</span><br><span class="line">    newMethod.declaringClass.removeMethod(replacedMethod)</span><br><span class="line">&#125;</span><br><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * 是否有外部变量引用</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="keyword">static</span> <span class="keyword">boolean</span> hasOutParams(CtMethod m1, CtMethod m2) &#123;</span><br><span class="line">    <span class="keyword">return</span> Descriptor.numOfParameters(m1.methodInfo.descriptor) != Descriptor.</span><br><span class="line">        numOfParameters(m2.methodInfo.descriptor)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>在编译时，如果有外部变量的引用，在外部类中实现的方法的参数就会比接口实现类中的方法多，因为要把外部变量传递给具体实现方法中。另外，生成新方法要考虑是否有返回值，有无返回值具体代码不同。</p>
+<h3 id="遗留问题"><a href="#遗留问题" class="headerlink" title="遗留问题"></a>遗留问题</h3><p>除去上面提到的四种情景，还要考虑<code>lambda</code>表达式修复前后代码的差异，根据是否有外部类的方法调用和外部变量引用，要考虑的情况就复杂多了，但通过上面的分析可以看出，前后一致不需要考虑，因此只需要考虑前后不一致的情况。其中修复前就有外部类的方法调用或者外部变量的引用或者两者兼得，这种也不需要单独去处理，因为修复的代码只有自己逻辑，所以按照前面的第一种情况处理没有任何问题。最后就是修复后的代码才有外部类的方法调用或者外部变量的引用，这种情况过于复杂，涉及到构造方法变更，添加成员变量，多个方法要修复等，所以还没有比较好的方法实现。</p>
+<h2 id="小结"><a href="#小结" class="headerlink" title="小结"></a>小结</h2><p>依赖库版本问题只要注意就能避免，<code>lambda</code>表达式的编译以及优化比较复杂，需要一点点去查看生成的<code>jar</code>文件，并反复对比，确保每一种情况都有考虑到，另外<code>javassit</code>的使用要熟悉，尤其是对于类、方法甚至其他变量的操作要清楚，才能更好去实现。</p>
+
+      
+    </div>
+    
+    
+    
+
+    
+
+    
+
+    
+
+    <footer class="post-footer">
+      
+        <div class="post-tags">
+          
+            <a href="/tags/Android/" rel="tag"># Android</a>
+          
+            <a href="/tags/热修复/" rel="tag"># 热修复</a>
+          
+            <a href="/tags/Robust/" rel="tag"># Robust</a>
+          
+        </div>
+      
+
+      
+      
+      
+
+      
+        <div class="post-nav">
+          <div class="post-nav-next post-nav-item">
+            
+              <a href="/post/res-xml-parse/" rel="next" title="Android二进制xml资源文件解析">
+                <i class="fa fa-chevron-left"></i> Android二进制xml资源文件解析
+              </a>
+            
+          </div>
+
+          <span class="post-nav-divider"></span>
+
+          <div class="post-nav-prev post-nav-item">
+            
+          </div>
+        </div>
+      
+
+      
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+
+    <div class="post-spread">
+      
+    </div>
+  </div>
+
+
+          </div>
+          
+
+
+          
+
+  
+
+
+
+        </div>
+        
+          
+  
+  <div class="sidebar-toggle">
+    <div class="sidebar-toggle-line-wrap">
+      <span class="sidebar-toggle-line sidebar-toggle-line-first"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-middle"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-last"></span>
+    </div>
+  </div>
+
+  <aside id="sidebar" class="sidebar">
+    
+    <div class="sidebar-inner">
+
+      
+
+      
+        <ul class="sidebar-nav motion-element">
+          <li class="sidebar-nav-toc sidebar-nav-active" data-target="post-toc-wrap">
+            文章目录
+          </li>
+          <li class="sidebar-nav-overview" data-target="site-overview-wrap">
+            站点概览
+          </li>
+        </ul>
+      
+
+      <section class="site-overview-wrap sidebar-panel">
+        <div class="site-overview">
+          <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+            
+              <p class="site-author-name" itemprop="name">YMlion</p>
+              <p class="site-description motion-element" itemprop="description">业精于勤，荒于嬉；行成于思，毁于随。</p>
+          </div>
+
+          <nav class="site-state motion-element">
+
+            
+              <div class="site-state-item site-state-posts">
+              
+                <a href="/archives/">
+              
+                  <span class="site-state-item-count">13</span>
+                  <span class="site-state-item-name">日志</span>
+                </a>
+              </div>
+            
+
+            
+              
+              
+              <div class="site-state-item site-state-categories">
+                <a href="/categories/index.html">
+                  <span class="site-state-item-count">4</span>
+                  <span class="site-state-item-name">分类</span>
+                </a>
+              </div>
+            
+
+            
+              
+              
+              <div class="site-state-item site-state-tags">
+                <a href="/tags/index.html">
+                  <span class="site-state-item-count">13</span>
+                  <span class="site-state-item-name">标签</span>
+                </a>
+              </div>
+            
+
+          </nav>
+
+          
+            <div class="feed-link motion-element">
+              <a href="/atom.xml" rel="alternate">
+                <i class="fa fa-rss"></i>
+                RSS
+              </a>
+            </div>
+          
+
+          <div class="links-of-author motion-element">
+            
+              
+                <span class="links-of-author-item">
+                  <a href="https://github.com/YMlion" target="_blank" title="GitHub">
+                    
+                      <i class="fa fa-fw fa-github"></i>GitHub</a>
+                </span>
+              
+                <span class="links-of-author-item">
+                  <a href="mailto:lmion.yao@gmail.com" target="_blank" title="E-Mail">
+                    
+                      <i class="fa fa-fw fa-envelope"></i>E-Mail</a>
+                </span>
+              
+            
+          </div>
+
+          
+          
+
+          
+          
+
+          
+
+        </div>
+      </section>
+
+      
+      <!--noindex-->
+        <section class="post-toc-wrap motion-element sidebar-panel sidebar-panel-active">
+          <div class="post-toc">
+
+            
+              
+            
+
+            
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#依赖库版本"><span class="nav-number">1.</span> <span class="nav-text">依赖库版本</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#lambda表达式"><span class="nav-number">2.</span> <span class="nav-text">lambda表达式</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#lambda实现逻辑"><span class="nav-number">2.1.</span> <span class="nav-text">lambda实现逻辑</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#lambda表达式编译情景"><span class="nav-number">2.2.</span> <span class="nav-text">lambda表达式编译情景</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#lambda表达式修复"><span class="nav-number">2.3.</span> <span class="nav-text">lambda表达式修复</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#遗留问题"><span class="nav-number">2.4.</span> <span class="nav-text">遗留问题</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#小结"><span class="nav-number">3.</span> <span class="nav-text">小结</span></a></li></ol></div>
+            
+
+          </div>
+        </section>
+      <!--/noindex-->
+      
+
+      
+
+    </div>
+  </aside>
+
+
+        
+      </div>
+    </main>
+
+    <footer id="footer" class="footer">
+      <div class="footer-inner">
+        <div class="copyright">&copy; 2015 &mdash; <span itemprop="copyrightYear">2018</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">YMlion</span>
+
+  
+</div>
+
+
+  <div class="powered-by">由 <a class="theme-link" target="_blank" href="https://hexo.io">Hexo</a> 强力驱动</div>
+
+
+
+  <span class="post-meta-divider">|</span>
+
+
+
+  <div class="theme-info">主题 &mdash; <a class="theme-link" target="_blank" href="https://github.com/iissnan/hexo-theme-next">NexT.Pisces</a></div>
+
+
+
+
+        
+<div class="busuanzi-count">
+  <script async src="https://dn-lbstatics.qbox.me/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+  
+    <span class="site-uv">
+      <i class="fa fa-user"></i>
+      <span class="busuanzi-value" id="busuanzi_value_site_uv"></span>
+      
+    </span>
+  
+
+  
+    <span class="site-pv">
+      <i class="fa fa-eye"></i>
+      <span class="busuanzi-value" id="busuanzi_value_site_pv"></span>
+      
+    </span>
+  
+</div>
+
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+
+    
+      <div class="back-to-top">
+        <i class="fa fa-arrow-up"></i>
+        
+      </div>
+    
+
+    
+
+  </div>
+
+  
+
+<script type="text/javascript">
+  if (Object.prototype.toString.call(window.Promise) !== '[object Function]') {
+    window.Promise = null;
+  }
+</script>
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+    <script type="text/javascript" src="/lib/jquery/index.js?v=2.1.3"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/fastclick/lib/fastclick.min.js?v=1.0.6"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/jquery_lazyload/jquery.lazyload.js?v=1.9.7"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/fancybox/source/jquery.fancybox.pack.js?v=2.1.5"></script>
+  
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/utils.js?v=5.1.3"></script>
+
+  <script type="text/javascript" src="/js/src/motion.js?v=5.1.3"></script>
+
+
+
+  
+  
+
+
+  <script type="text/javascript" src="/js/src/affix.js?v=5.1.3"></script>
+
+  <script type="text/javascript" src="/js/src/schemes/pisces.js?v=5.1.3"></script>
+
+
+
+  
+  <script type="text/javascript" src="/js/src/scrollspy.js?v=5.1.3"></script>
+<script type="text/javascript" src="/js/src/post-details.js?v=5.1.3"></script>
+
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/bootstrap.js?v=5.1.3"></script>
+
+
+
+  
+
+
+  
+
+
+
+
+	
+
+
+
+
+
+  
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+
+  
+
+  
+
+  
+
+  
+  
+
+  
+
+  
+
+  
+
+</body>
+</html>
