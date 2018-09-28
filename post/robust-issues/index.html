@@ -90,7 +90,7 @@
 <meta property="og:description" content="Robust在使用过程中有很多坑，一不小心就会掉入坑中，半天爬不出来。">
 <meta property="og:locale" content="zh-Hans">
 <meta property="og:image" content="https://developer.android.com/studio/images/write/desugar_2x.png">
-<meta property="og:updated_time" content="2018-09-28T11:08:47.359Z">
+<meta property="og:updated_time" content="2018-09-28T11:15:57.259Z">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="Robust填坑">
 <meta name="twitter:description" content="Robust在使用过程中有很多坑，一不小心就会掉入坑中，半天爬不出来。">
@@ -381,10 +381,16 @@
 <p><code>javac</code>编译<code>lambda</code>是在运行时去解析，而<code>dalvik</code>不支持<code>invokedynamic</code>命令，所以就要将<code>.class</code>字节码编译为<code>dalvik</code>可以识别的字节码文件。<code>.class</code>文件通过<code>dex</code>优化合并为<code>.dex</code>文件时，<code>lambda</code>表达式会被进一步优化，所以<code>lambda</code>表达式处理起来稍微麻烦一些。</p>
 <h3 id="lambda表达式编译情景"><a href="#lambda表达式编译情景" class="headerlink" title="lambda表达式编译情景"></a><code>lambda</code>表达式编译情景</h3><p><code>as3.x</code>编译<code>lambda</code>表达式时，会生成一个单独的接口实现类，而具体的实现则是放在了外部类中，生成对应的一个实现方法，接口方法中调用外部类的实现方法，至于生成的实现方法是不是静态的，可具体情况具体分析。另外，这种情况可也能会在<code>dex</code>优化中出现不同结果，有可能被内联，有可能继续保留外部的实现方法，具体看下面的几种情况。</p>
 <p>通过对<code>lambda</code>表达式代码的表面分析，可以简单得出4种情景：是否有外部类的方法的调用和是否有外部变量的引用。</p>
-<p>首先看最简单的一种情况，就是既没有外部方法调用也没有外部变量引用，纯粹是自己的逻辑，此时的<code>lambda</code>表达式会生成一个单独的类，并在类内生成一个静态实例，访问时就直接使用该静态实例调用其实现方法。这种情况下，和外部类没有任何关系，所以<code>dex</code>优化时会把在外部类中的实现方法逻辑重新移动到接口实现类中。</p>
-<p>第二种是只有外部变量的引用，此时和第一种情况没有太大区别，唯一的区别就是此时的生成的<code>lambda</code>类没有静态实例，所需要的外部变量通过构造方法传递进来，在其方法实现中就会引用传递过来的成员变量，所以这种情况下也会被<code>dex</code>优化掉。</p>
-<p>第三种就是只有外部类的方法调用，这种情况和第二种类似，因为有方法调用，所以也会保存外部类的引用，但在这种情况下，如果说调用的外部类方法不是很复杂，则有可能在最终生成的<code>.dex</code>中，会被优化掉。</p>
-<p>第四种就是既有外部类的方法调用，也有外部变量的引用，这种情况下稍微复杂，所以<code>dex</code>优化时不会被优化掉，就还是正常调用外部类的实现方法。</p>
+<ol>
+<li><p>首先看最简单的一种情况，就是既没有外部方法调用也没有外部变量引用，纯粹是自己的逻辑，此时的<code>lambda</code>表达式会生成一个单独的类，并在类内生成一个静态实例，访问时就直接使用该静态实例调用其实现方法。这种情况下，和外部类没有任何关系，所以<code>dex</code>优化时会把在外部类中的实现方法逻辑重新移动到接口实现类中。</p>
+</li>
+<li><p>第二种是只有外部变量的引用，此时和第一种情况没有太大区别，唯一的区别就是此时的生成的<code>lambda</code>类没有静态实例，所需要的外部变量通过构造方法传递进来，在其方法实现中就会引用传递过来的成员变量，所以这种情况下也会被<code>dex</code>优化掉。</p>
+</li>
+<li><p>第三种就是只有外部类的方法调用，这种情况和第二种类似，因为有方法调用，所以也会保存外部类的引用，但在这种情况下，如果说调用的外部类方法不是很复杂，则有可能在最终生成的<code>.dex</code>中，会被优化掉。</p>
+</li>
+<li><p>第四种就是既有外部类的方法调用，也有外部变量的引用，这种情况下稍微复杂，所以<code>dex</code>优化时不会被优化掉，就还是正常调用外部类的实现方法。</p>
+</li>
+</ol>
 <blockquote>
 <p>除了第一种，其他三种情况下，因为有外部类或者变量的引用，在<code>android</code>开发中很容易引起内存泄漏，尤其是<code>Context</code>、<code>View</code>等对象的外部引用，因此这种情况下慎用<code>lambda</code>表达式。</p>
 </blockquote>
